@@ -1,0 +1,3 @@
+[submodule "MANET-Testbed"]
+	path = MANET-Testbed
+	url = git@github.com:ggailbr/MANET-Testbed.git
