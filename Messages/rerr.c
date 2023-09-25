@@ -14,7 +14,6 @@ uint8_t *generate_rerr_message(int *packet_length, int n, int number_dests, ...)
     // header.reserved_b = 0x8000;
     // header.reserved_b &= (n<<15);
     header.dest_count = number_dests;
-    printf("%d", sizeof(header));
     // Reading in the destinations and allocating memory
     va_list dests;
     va_start(dests, number_dests);
