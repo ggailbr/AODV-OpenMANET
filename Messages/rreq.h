@@ -6,7 +6,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../AODV.h"
+#include "AODV.h"
+
+// The Join Flag for Multicast
+#define RREQ_JOIN       0b10000U
+// The Repair Flag for Multicast
+#define RREQ_REPAIR     0b01000U
+// Gratuitous flag to make a gratuitous RREP
+#define RREQ_GRAT       0b00100U
+// Destination only can respond to RREQ
+#define RREQ_DEST_ONLY  0b00010U
+// Unknown destination sequence number
+#define RREQ_UNKNOWN    0b00001U
 
 
 /**
@@ -14,16 +25,8 @@
  * \brief The constant header for a RREQ Message Format
  * \var rreq_header::type
  *  The type of message, should be 1
- * \var rreq_header::j
- *  Join flag
- * \var rreq_header::r
- *  Repair flag
- * \var rreq_header::g
- *  Gratuitous RREP flag. If a gratuitous RREP should be unicast to dest_ip
- * \var rreq_header::d
- *  Destination only flag. If only the destination should reply
- * \var rreq_header::u
- *  Unknown sequence number. Dest_seq is unknown
+ * \var rreq_header::flags
+ *  A bit field containing the different flags for an RREQ message
  * \var rreq_header::reserved
  *  No use yet, should be sent as 0
  * \var rreq_header::hop_count
@@ -46,11 +49,7 @@
 typedef struct rreq_header_t{
     #if __BYTE_ORDER == __BIG_ENDIAN
     uint32_t type : 8;
-    uint32_t j : 1;
-    uint32_t r : 1;
-    uint32_t g : 1;
-    uint32_t d : 1;
-    uint32_t u : 1;
+    uint32_t flags : 5;
     uint32_t reserved : 11;
     uint32_t hop_count : 8;
     uint32_t rreq_id;
@@ -60,24 +59,43 @@ typedef struct rreq_header_t{
     uint32_t src_seq;
 
     #elif __BYTE_ORDER == __LITTLE_ENDIAN
-    uint32_t src_seq;
-    uint32_t src_ip;
-    uint32_t dest_seq;
-    uint32_t dest_ip;
-    uint32_t rreq_id;
     uint32_t hop_count : 8;
     uint32_t reserved : 11;
-    uint32_t u : 1;
-    uint32_t d : 1;
-    uint32_t g : 1;
-    uint32_t r : 1;
-    uint32_t j : 1;
+    uint32_t flags : 5;
     uint32_t type : 8;
+    uint32_t rreq_id;
+    uint32_t dest_ip;
+    uint32_t dest_seq;
+    uint32_t src_ip;
+    uint32_t src_seq;
     #else
     # error "No Endianness detected"
     #endif
 } rreq_header;
-// [TODO]
-uint8_t *generate_rreq_message(int *packet_length, int number_dests);
+/**
+ * \brief Generates a fresh RREQ Message. This should only be done by the originator
+ *  The RREQ ID MUST be incremented prior to calling this function
+ *  The originator sequence number MUST be incremented prior to calling this function
+ * 
+ * @param flags Binary OR of flags to pass into the function. Set to 0 otherwise
+ *  RREQ_JOIN, RREQ_REPAIR, RREQ_GRAT, RREQ_DEST_ONLY, RREQ_UNKNOWN
+ * @param rreq_id The incremented RREQ_ID to store
+ *  Must be incremented for each attempt
+ * @param dest_ip The IP of the destination of the RREQ
+ * @param dest_seq The last known Sequence number or blank (0) when RREQ_UNKNOWN
+ * @param origin_ip The IP address of this device
+ * @param origin_seq The sequence number increments before sending the initial RREQ
+ *  Not specified if it should be incremented for subsequent attempts
+ * @return A buffer containing the packed members of the packet
+ */
+uint8_t *generate_rreq_message(uint8_t flags, uint32_t rreq_id, uint32_t dest_ip, uint32_t dest_seq, uint32_t origin_ip, uint32_t origin_seq);
+
+/**
+ * \brief Increments the hop count in an existing message
+ *  This is the only thing that should be done by intermediate nodes
+ * 
+ * @param received_packet The buffer of data to increment
+ */
+void increment_hop_rreq(uint8_t *received_packet);
 
 #endif
