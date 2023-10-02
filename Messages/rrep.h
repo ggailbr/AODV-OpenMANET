@@ -6,17 +6,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../AODV.h"
+#include "AODV.h"
+
+#define RREP_REPAIR 0b10U
+#define RREP_ACK 0b1U
 
 /**
  * \struct rrep_message
  * \brief The constant header for a rrep Message Format
  * \var rrep_header::type
  *  The type of message, should be 2
- * \var rrep_header::r
- *  Repair flag
- * \var rrep_header::a
- *  Acknowledgement required
+ * \var rrep_header::flags
+ *      If an acknowledge or repair flag
+ *      Use RREP_ACK and RREP_REPAIR
  * \var rrep_header::reserved
  *  No use yet, should be sent as 0
  * \var rrep_header::prefix_size
@@ -39,8 +41,7 @@
 typedef struct rrep_header_t{
     #if __BYTE_ORDER == __BIG_ENDIAN
     uint32_t type : 8;
-    uint32_t r : 1;
-    uint32_t a : 1;
+    uint32_t flags : 2;
     uint32_t reserved : 9;
     uint32_t prefix_size : 5;
     uint32_t hop_count : 8;
@@ -50,19 +51,37 @@ typedef struct rrep_header_t{
     uint32_t lifetime;
 
     #elif __BYTE_ORDER == __LITTLE_ENDIAN
-    uint32_t lifetime;
-    uint32_t src_ip;
-    uint32_t dest_seq;
-    uint32_t dest_ip;
     uint32_t hop_count : 8;
     uint32_t prefix_size : 5;
     uint32_t reserved : 9;
-    uint32_t a : 1;
-    uint32_t r : 1;
+    uint32_t flags : 2;
     uint32_t type : 8;
+    uint32_t dest_ip;
+    uint32_t dest_seq;
+    uint32_t src_ip;
+    uint32_t lifetime;
     #else
     # error "No Endianness detected"
     #endif
 } rrep_header;
+
+/**
+ * \brief Generates an RREP message based off of of the given parameters.
+ * 
+ * @param flags Determines special behavior of the packet
+ *      Logical OR of any of the following:
+ *          RREP_REPAIR - Multicast repair
+ *          RREP_ACK - Acknoledgment required
+ * @param prefix_size Used for multicast and not implemented yet
+ * @param dest_ip The IP address of the destination for the corresponding RREQ
+ * @param dest_seq The Sequence number of this destination
+ *      Should be the newest sequence number:
+ *          Either the max of the RREQ and current number
+ * @param origin_ip The originator of the corresponding RREQ
+ * @return 
+ */
+uint8_t * generate_rrep_message( uint8_t flags, uint8_t prefix_size, uint32_t dest_ip, uint32_t dest_seq, uint32_t origin_ip);
+
+void increment_hop_rrep(uint8_t *received_packet);
 
 #endif

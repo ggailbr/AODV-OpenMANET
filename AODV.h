@@ -2,11 +2,12 @@
 #define AODV_H
 
 #include "safe.h"
+#include "debug.h"
 
 // Configuration Parameters
 //---------------------------------------------
 // In ms
-#define ACTIVE_ROUTE_TIMEOUT 3,000 // In ms
+#define ACTIVE_ROUTE_TIMEOUT 3000 // In ms
 #define ALLOWED_HELLO_LOSS 2
 #define RREQ_RETRIES 2
 #define RREQ_RATELIMIT 10
@@ -14,14 +15,14 @@
 #define TTL_START 1
 #define TTL_INCREMENT 2
 #define TTL_THRESHOLD 7
-#define HELLO_INTERVAL 1,000 // In ms
+#define HELLO_INTERVAL 1000 // In ms
 #define LOCAL_ADD_TTL 2
 #define RERR_RATELIMIT 10
 #define NET_DIAMETER 35
 #define NODE_TRAVERSAL_TIME 40 // In ms
 #define NET_TRAVERSAL_TIME 2 * NODE_TRAVERSAL_TIME * NET_DIAMETER
 #define BLACKLIST_TIMEOUT RREQ_RETRIES * NET_TRAVERSAL_TIME
-#define DELETE_PERIOD //[TODO]
+#define DELETE_PERIOD 5 * HELLO_INTERVAL
 #define MAX_REPAIR_TTL 0.3 * NET_DIAMETER
 #define MIN_REPAIR_TTL //[TODO]
 #define MY_ROUTE_TIMEOUT 2 * ACTIVE_ROUTE_TIMEOUT

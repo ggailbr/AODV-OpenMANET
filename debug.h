@@ -3,9 +3,9 @@
 #include <stdio.h>
 
 #ifdef DEBUG
-#define dprintf(...)  fprintf(stderr, __VA_ARGS__)
+#define debprintf(...)  fprintf(stderr, __VA_ARGS__)
 #else
-#define dprintf(...)
+#define debprintf(...)
 #endif
 
 #endif
