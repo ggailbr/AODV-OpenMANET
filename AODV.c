@@ -11,6 +11,7 @@ safe_32 sequence_num;
  * of route creation. 
 */
 int main(int argc, char **argv){
+    ip_address = 
     rreq_id.number = 0x0U;
     sequence_num.number = 0x0U;
     pthread_mutex_init(&rreq_id.mutex, NULL);

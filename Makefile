@@ -1,6 +1,6 @@
 CC ?= gcc
 CFLAGS = -Wall 
-CFLAGS += -IMANET-Testbed
+CFLAGS += -IMANET-Testbed/
 CFLAGS += -IDataStructures/
 CFLAGS += -IMessages/
 CFLAGS += -DDEBUG
