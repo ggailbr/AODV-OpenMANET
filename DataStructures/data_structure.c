@@ -19,11 +19,30 @@
 */
 
 #include "data_structure.h"
+#include <stdlib.h>
+#include <string.h>
 
-uint8_t add_entry_to_data_structure(data_header container, entry *entry, uint32_t sort_variable, size_t entry_bytes){
-    // Since it is just an array, add it based on the last couple bytes
-
+uint8_t add_entry_to_data_structure(data_header container, entry entry, uint32_t sort_variable){
+    // Since it is just an array, add it based on the last couple bytes of uint32_t
+    uint8_t index = sort_variable >> 24;
+    debprintf("For %08x : Index Found to be %08x\n", sort_variable, index);
+    container[index] = entry;
+    return index;
 }
-uint8_t remove_entry_from_data_structure(data_header container, entry *entry, uint32_t search_variable);
-uint8_t find_entry_in_data_structure(data_header container, entry *entry, uint32_t search_variable);
-data_header create_data_header();
+entry remove_entry_from_data_structure(data_header container, uint32_t search_variable){
+    uint8_t index = search_variable >> 24;
+    debprintf("For %08x : Index Found to be %08x\n", search_variable, index);
+    entry return_val = container[index];
+    container[index] = NULL;
+    return return_val;
+}
+entry find_entry_in_data_structure(data_header container, uint32_t search_variable){
+    uint8_t index = search_variable >> 24;
+    debprintf("For %08x : Index Found to be %08x\n", search_variable, index);
+    return container[index];
+}
+data_header create_data_header(){
+    data_header return_val = (data_header) malloc(sizeof(entry) * 256);
+    memset(return_val, 0, sizeof(entry) * 256);
+    return return_val;
+}
