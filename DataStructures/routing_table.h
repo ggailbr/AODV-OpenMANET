@@ -16,6 +16,7 @@ typedef enum route_status_en{
 typedef struct{
     uint32_t dest_ip;
     uint32_t dest_seq;
+    uint8_t seq_valid;
     uint32_t next_hop;
     uint32_t hop_count;
     route_status status;
@@ -68,8 +69,7 @@ char move_routing_entry(routing_table initial, routing_table destination, uint32
  * \param hop_count The new hop count. Use -1 to read
  * \return The previous (or current in case of -1) hop_count
  */
-*/
-uint32_t set_hop_count(routing_table table, uint32_t dest_ip, uint32_t hop_count)
+uint32_t set_hop_count(routing_table table, uint32_t dest_ip, uint32_t hop_count);
 
 /**
  * \brief Makes the base object to hold the routing table
@@ -77,6 +77,15 @@ uint32_t set_hop_count(routing_table table, uint32_t dest_ip, uint32_t hop_count
  * @return A routing_table variable to represent the table
  */
 routing_table create_routing_table();
+/**
+ * \brief Interfaces between data structure and higher level function. 
+ *  Finds a routing entry from the table
+ * 
+ * @param table The table to find the entry
+ * @param dest_ip The destination IP of the entry
+ * @return A pointer to the entry
+ */
+routing_entry *get_routing_entry(routing_table table, uint32_t dest_ip);
 
 
 

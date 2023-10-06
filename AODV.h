@@ -32,11 +32,13 @@
 #define RING_TRAVERSAL_TIME 2 * NODE_TRAVERSAL_TIME * (TTL_VALUE + TIMEOUT_BUFFER)
 //---------------------------------------------
 
-#define RREQ_TYPE 1u
-#define RREP_TYPE 2u
-#define RERR_TYPE 3u
-#define RREP_ACK_TYPE 4u
-#define HELLO_TYPE 1u
+typedef enum packet_type_e{
+    RREQ_TYPE = 1u,
+    RREP_TYPE = 2u,
+    RERR_TYPE = 3u,
+    RREP_ACK_TYPE = 4u,
+    HELLO_TYPE = 1u
+}packet_type;
 
 
 extern uint32_t ip_address;

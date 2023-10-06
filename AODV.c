@@ -10,6 +10,12 @@ safe_32 sequence_num;
  * This is a protocol main function. This is run once at the start 
  * of route creation. 
 */
+
+/*
+Protocol Prototypes representing undelying functions not yet implemented
+*/
+
+
 int main(int argc, char **argv){
     ip_address = 
     rreq_id.number = 0x0U;
@@ -30,6 +36,24 @@ int main(int argc, char **argv){
  * 
 */
 int incoming_message(){
-
+    packet_type type = get_packet_type();
+    uint32_t lenth = get_packet_length();
+    switch(type){
+        case(RREQ_TYPE):
+            
+            break;
+        case(RREP_TYPE):
+            break;
+        case(RERR_TYPE):
+            break;
+        case(RREP_ACK_TYPE):
+            break;
+        default:
+            debprintf("[ERROR] : Unknown Packet Type");
+    }
     return 0;
+}
+
+int outgoing_message(){
+
 }
