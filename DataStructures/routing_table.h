@@ -13,10 +13,15 @@ typedef enum route_status_en{
     ROUTE_UNCONFIRMED = 2
 }route_status;
 
+typedef enum seq_valid_en{
+    SEQ_VALID,
+    SEQ_INVALID
+}seq_valid;
+
 typedef struct{
     uint32_t dest_ip;
     uint32_t dest_seq;
-    uint8_t seq_valid;
+    seq_valid seq_valid;
     uint32_t next_hop;
     uint32_t hop_count;
     route_status status;
@@ -32,12 +37,13 @@ typedef data_header routing_table;
  * @param table The Routing Table for the entry to be stored
  * @param dest_ip The destination IP of the entry
  * @param dest_seq The destination sequence number
+ * @param valid_seq If the sequence number is valid
  * @param next_hop The next hop towards the destination
  * @param hop_count The current number of hops to the destination
  * @param time_out The time for this route to expire
  * @return If the operation was successful (-1 on error)
  */
-char create_routing_entry(routing_table table, uint32_t dest_ip, uint32_t dest_seq, uint32_t next_hop, uint32_t hop_count, uint32_t time_out);
+char create_or_update_routing_entry(routing_table table, uint32_t dest_ip, uint32_t dest_seq, seq_valid valid_seq, uint32_t next_hop, uint32_t hop_count, uint32_t time_out);
 /**
  * \brief Set the route status for the given destination
  * 
@@ -87,6 +93,8 @@ routing_table create_routing_table();
  */
 routing_entry *get_routing_entry(routing_table table, uint32_t dest_ip);
 
+// Header [TODO]
+int8_t compare_sequence_numbers(routing_table table, uint32_t dest_ip, uint32_t seq_num, uint8_t *error);
 
 
 #endif // ROUTING_TABLE_H

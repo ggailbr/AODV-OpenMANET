@@ -18,10 +18,10 @@ void free_entry(routing_entry *r_entry){
     free(r_entry);
 }
 
-char create_routing_entry(routing_table table, uint32_t dest_ip, uint32_t dest_seq, uint32_t next_hop, uint32_t hop_count, uint32_t time_out){
+char create_or_update_routing_entry(routing_table table, uint32_t dest_ip, uint32_t dest_seq, seq_valid valid_seq, uint32_t next_hop, uint32_t hop_count, uint32_t time_out){
     // First Check if one already exists
     if(get_routing_entry(table, dest_ip) != NULL){
-        debprintf("[ERROR] : Entry already initialized\n");
+
         return -1;
     }
     routing_entry * new_entry = (routing_entry *) malloc(sizeof(routing_entry));
@@ -29,6 +29,7 @@ char create_routing_entry(routing_table table, uint32_t dest_ip, uint32_t dest_s
     new_entry->dest_seq = dest_seq;
     new_entry->next_hop = next_hop;
     new_entry->hop_count = hop_count;
+    new_entry->seq_valid = valid_seq;
     new_entry->status = ROUTE_UNCONFIRMED;
     new_entry->time_out = time_out;
     new_entry->precursor_list = (linked_list *) malloc(sizeof(linked_list));
@@ -67,6 +68,15 @@ char move_routing_entry(routing_table initial, routing_table destination, uint32
         debprintf("[ERROR] : Unable to move entry");
         return -1;
     }
+}
+
+int8_t compare_sequence_numbers(routing_table table, uint32_t dest_ip, uint32_t seq_num, uint8_t *error){
+    routing_entry *dest_entry = get_routing_entry(table, dest_ip);
+    if(dest_entry == NULL || dest_entry->seq_valid == SEQ_INVALID){
+        *error = -1;
+        return 0;
+    }
+    return ((int32_t) dest_entry->dest_seq - (int32_t) seq_num);
 }
 
 /**

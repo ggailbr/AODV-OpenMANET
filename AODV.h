@@ -3,6 +3,13 @@
 
 #include "safe.h"
 #include "debug.h"
+#include "routing_table.h"
+#include "rerr.h"
+#include "rreq.h"
+#include "rrep.h"
+#include "rreq_tracker.h"
+#include "api.h"
+#include "send_messages.h"
 
 // Configuration Parameters
 //---------------------------------------------
@@ -44,6 +51,8 @@ typedef enum packet_type_e{
 extern uint32_t ip_address;
 extern safe_32 rreq_id;
 extern safe_32 sequence_num;
+extern routing_table routes;
+extern rreq_table rreq_ids;
 
 
 #endif

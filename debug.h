@@ -8,4 +8,6 @@
 #define debprintf(...)
 #endif
 
+#define max(x, y) x>y?x:y
+#define seq_compare(x, y) (int32_t)x - (int32_t)y
 #endif
