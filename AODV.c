@@ -58,6 +58,7 @@ int incoming_message(uint8_t *buf){
             create_or_update_routing_entry(routes, message->src_ip, message->src_seq, SEQ_VALID, sender_ip, message->hop_count, MY_ROUTE_TIMEOUT);
             // Check if we are the destination
             if(message->dest_ip == ip_address){
+                set_route_status(routes, message->src_ip, ROUTE_VALID);
                 send_rrep_destination(message);
                 return 0;
             }

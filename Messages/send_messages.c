@@ -14,8 +14,12 @@ void send_rrep_intermediate(rreq_header *message, uint32_t sender){
     // Getting "fresh enough" route entry
     routing_entry *dest_entry = get_routing_entry(routes, message->dest_ip);
     uint8_t *rrep_buf = generate_rrep_message(0, 0, message->dest_ip, dest_entry->dest_seq, message->src_ip);
-    // Add sender to precursor list
+    // Add sender to precursor list of forward route
     add_entry_to_list(&dest_entry->precursor_list, sender);
+    // Add next hop to precursor of reverse route
+    routing_entry * origin_entry = get_routing_entry(routes, message->src_ip);
+    add_entry_to_list(&origin_entry->precursor_list, dest_entry->next_hop);
+
 
     // Setting expiration
     rrep_header * rrep_message = (rrep_header *)rrep_buf;
