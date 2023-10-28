@@ -67,3 +67,14 @@
 `-send_message.c/h` : The routines needed to send messages by the routing protocol
 
 `README.md` : This
+
+## Rules
+
+These are some rules I am thinking for implementation. This is mainly to get them straight and follow them to ensure the flow of the code is logical and safe:
+1) The routing table functions are only responsible for setting up the basic values. A new entry should be setup with all known information and the defaults. It will also initialize the mutex
+2) It is on the message receiving and transmitting functions to handle and create the threads for timing, not on the routing table functions.
+3) To find next hops and precursors, we will iterate through each entry in the table, searching for these next hops
+
+## TODO
+
+1) Implement RERR Sending from the invalid thread

@@ -16,21 +16,23 @@ routing_table create_routing_table(){
  * @param r_entry The entry to be freed
  */
 void free_entry(routing_entry *r_entry){
+    pthread_cancel(r_entry->expiration_thread);
+    pthread_cancel(r_entry->rreq_id_thread);
     pthread_mutex_destroy(&r_entry->entry_mutex);
     free_linked_list(r_entry->precursor_list);
-    pthread_cancel(r_entry->delete_thread);
-    pthread_cancel(r_entry->expiration_thread);
-    pthread_cancel(r_entry->rreq_thread);
     free(r_entry);
 }
 
-routing_entry * create_or_get_routing_entry(routing_table table, uint32_t dest_ip, uint32_t dest_seq, seq_valid valid_seq, uint32_t next_hop, uint32_t hop_count, uint32_t time_out){
+routing_entry * create_or_get_routing_entry(routing_table table, uint32_t dest_ip, uint32_t dest_seq, seq_valid valid_seq, uint32_t next_hop, uint32_t hop_count, uint32_t time_out, uint8_t *new){
     routing_entry * new_entry;
     // First Check if one already exists
     if((new_entry = get_routing_entry(table, dest_ip)) != NULL){
+        *new = 0;
         return new_entry;
     }
+    *new = 1;
     new_entry = (routing_entry *) malloc(sizeof(routing_entry));
+    pthread_mutex_init(&new_entry->entry_mutex, NULL);
     new_entry->dest_ip = dest_ip;
     new_entry->dest_seq = dest_seq;
     new_entry->next_hop = next_hop;
@@ -95,30 +97,59 @@ routing_entry *get_routing_entry(routing_table table, uint32_t dest_ip){
     return (routing_entry *) find_entry_in_data_structure(table, dest_ip);
 }
 
-
-
-
 // -------------Declare routing table specific functions--------------------
 
-// void expiration_func(routing_entry * own_entry){
-//     struct timespec current_time;
-//     clock_gettime(CLOCK_REALTIME, &current_time);
-//     subtract_time(&current_time, &own_entry->time_out);
-//     while(nanosleep(&current_time, &current_time));
-//     pthread_mutex_lock(&own_entry->entry_mutex);
-//     own_entry->status = ROUTE_INVALID;
-//     own_entry->expiration_thread = 0;
-//     check_for_rerr(own_entry);
-//     pthread_mutex_unlock(&own_entry->entry_mutex);
-// }
+/**
+ * @brief When a routing table entry is supposed to expire. It is a thread that
+ *  will wait until the route timeout. After such, it will either delete the invalid
+ *  route or will mark itself as invalid
+ * 
+ * @param own_entry The entry to expire on a timer
+ */
+void expiration_func(routing_entry * own_entry){
+    // Find the difference in current time and expiration time
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+    struct timespec current_time;
+    clock_gettime(CLOCK_REALTIME, &current_time);
+    subtract_time(&current_time, &own_entry->time_out);
+    // Wait until the route should expire
+    while(nanosleep(&current_time, &current_time));
+    // If it expires, grab the lock
+    pthread_mutex_lock(&own_entry->entry_mutex);
+    // If already invalid, delete itself
+    if(own_entry->status == ROUTE_INVALID){
+        pthread_mutex_unlock(&own_entry->entry_mutex);
+        free_entry(remove_routing_entry(routes, own_entry->dest_ip));
+        return;
+    }
+    // Otherwise, set as invalid and restart with deleting
+    own_entry->status = ROUTE_INVALID;
+    // Delete Routing Table Entry
+    DeleteEntry(own_entry->dest_ip, own_entry->next_hop);
+    // Send out Rerrs
+    // [TODO]
+    // Restart with delete timer
+    clock_gettime(CLOCK_REALTIME, &own_entry->time_out);
+    add_time_ms(&own_entry->time_out, DELETE_PERIOD);
+    pthread_mutex_unlock(&own_entry->entry_mutex);
+    // Calling with the delete period
+    expiration_func(own_entry);
+}
 
-// void delete_func(routing_entry * own_entry){
-//     struct timespec current_time;
-//     clock_gettime(CLOCK_REALTIME, &current_time);
-//     subtract_time(&current_time, &own_entry->time_out);
-//     while(nanosleep(&current_time, &current_time));
-//     pthread_mutex_lock(&own_entry->entry_mutex);
-//     pthread_mutex_unlock(&own_entry->entry_mutex);
-//     free_entry(remove_routing_entry(routes, own_entry->dest_ip));
-
-// }
+/**
+ * @brief Waits for the rreq_id buffer time before setting it to 0
+ * 
+ * @param own_entry The entry to monitor the RREQ_ID
+ */
+void rreq_id_func(routing_entry * own_entry){
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+    struct timespec current_time;
+    convert_ms_to_timespec(&current_time, PATH_DISCOVERY_TIME);
+    while(nanosleep(&current_time, &current_time));
+    pthread_mutex_lock(&own_entry->entry_mutex);
+    own_entry->rreq_id = 0;
+    own_entry->rreq_id_thread = NULL;
+    pthread_mutex_unlock(&own_entry->entry_mutex);
+}

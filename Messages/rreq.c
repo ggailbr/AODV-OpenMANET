@@ -15,6 +15,6 @@ uint8_t *generate_rreq_message(uint8_t flags, uint32_t rreq_id, uint32_t dest_ip
     return (uint8_t *) header;
 }
 
-void increment_hop_rreq(uint8_t *received_packet){
+static inline void increment_hop_rreq(uint8_t *received_packet){
     ((rreq_header *)received_packet)->hop_count++;
 }

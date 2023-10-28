@@ -10,7 +10,7 @@
  * @param current_time The current time to subtract from end time
  * @param end_time The end time to compare against
  */
-void subtract_time(timespec *current_time, timespec *end_time){
+void subtract_time(struct timespec *current_time, struct timespec *end_time){
     // current_time = End Time-CurrentTime
     current_time->tv_sec = end_time->tv_sec - current_time->tv_sec;
     if(current_time->tv_sec < 0){
@@ -31,7 +31,7 @@ void subtract_time(timespec *current_time, timespec *end_time){
  * @param end_time The time to subtract from
  * @return The difference in ms (returns 0 if below 0)
  */
-uint32_t get_ms_difference(timespec *current_time, timespec *end_time){
+uint32_t get_ms_difference(struct timespec *current_time, struct timespec *end_time){
     uint32_t ms_diff = 0;
     long end_time_nsec = end_time->tv_nsec;
     // If there is the current time is greater than the end time
@@ -54,7 +54,7 @@ uint32_t get_ms_difference(timespec *current_time, timespec *end_time){
  * @param current_time The current time to add, is modified by the function
  * @param end_time The time to add to
  */
-void add_time(timespec *current_time, timespec *end_time){
+void add_time(struct timespec *current_time, struct timespec *end_time){
     // current_time = End Time-CurrentTime
     current_time->tv_sec = end_time->tv_sec + current_time->tv_sec;
     current_time->tv_nsec = end_time->tv_nsec + current_time->tv_nsec;
@@ -70,7 +70,7 @@ void add_time(timespec *current_time, timespec *end_time){
  * @param current_time The time to be added to
  * @param miliseconds The time in ms to add
  */
-void add_time_ms(timespec *current_time, uint32_t miliseconds){
+void add_time_ms(struct timespec *current_time, uint32_t miliseconds){
     // current_time = End Time-CurrentTime
     current_time->tv_nsec = miliseconds*1000000 + current_time->tv_nsec;
     while(current_time->tv_nsec > 1000000000){
@@ -85,11 +85,85 @@ void add_time_ms(timespec *current_time, uint32_t miliseconds){
  * @param current_time The structure memory to store the result
  * @param miliseconds The time in MS to store in the current_time
  */
-void convert_ms_to_timespec(timespec *current_time, uint32_t miliseconds){
+void convert_ms_to_timespec(struct timespec *current_time, uint32_t miliseconds){
     current_time->tv_sec = 0;
     current_time->tv_nsec = miliseconds*1000000;
     while(current_time->tv_nsec > 1000000000){
         current_time->tv_nsec -= 1000000000;
         current_time->tv_sec++;
     }
+}
+
+/**
+ * @brief Returns ms out of a timespec
+ * 
+ * @param current_time The structure memory to store the result
+ * @param miliseconds The time in MS to store in the current_time
+ */
+uint32_t convert_timespec_to_ms(struct timespec *current_time){
+    uint32_t ms = 0;
+    ms += current_time->tv_sec * 1000;
+    ms += current_time->tv_nsec/1000000;
+    return ms;
+}
+
+/**
+ * @brief Returns the maximum of the two timespec
+ * 
+ * @param current_time Timespec 1
+ * @param end_time Timespec 2
+ * @return Pointer to Timespec with time
+ */
+struct timespec * max_timespec(struct timespec *current_time, struct timespec *end_time){
+    if(current_time->tv_sec >= end_time->tv_sec){
+        if(current_time->tv_nsec >= end_time->tv_nsec)
+            return current_time;
+        else{
+            if(current_time->tv_sec- (current_time->tv_nsec - end_time->tv_nsec)/1000000000 >= end_time->tv_sec)
+                return current_time;
+            else
+                return end_time;
+        }
+    }
+    return end_time;
+}
+
+/**
+ * @brief Starts the expiration timer for the routing_entry
+ * 
+ * @param entry The entry to start the timer for
+ * @param ms The time in ms. If 0, uses entry timeout. Otherwise,
+ *  modifies the entry
+ */
+void set_expiration_timer(routing_entry * entry, uint32_t ms){
+    // Lock the entry
+    // pthread_mutex_lock(&entry->entry_mutex);
+    // Stop Any Old Timer
+    if(!(entry->expiration_thread == NULL)){
+        pthread_cancel(entry->expiration_thread);
+    }
+    // Check if the user provided a time
+    if(ms != 0){
+        clock_gettime(CLOCK_REALTIME, &entry->time_out);
+        add_time_ms(&entry->time_out, ms);
+    }
+    // Start the new thread
+    pthread_create(&entry->expiration_thread, NULL, expiration_func, (void *) entry);
+    // pthread_mutex_unlock(&entry->entry_mutex);
+}
+/**
+ * @brief Starts a timer to null the rreqid for an IP
+ * 
+ * @param entry The entry associated with the rreq ID
+ */
+void start_rreq_timer(routing_entry * entry){
+    // Lock the entry
+    // pthread_mutex_lock(&entry->entry_mutex);
+    // Stop Any Old Timer
+    if(!(entry->expiration_thread == NULL)){
+        pthread_cancel(entry->expiration_thread);
+    }
+    // Start the new thread
+    pthread_create(&entry->expiration_thread, NULL, rreq_id_func, (void *) entry);
+    // pthread_mutex_unlock(&entry->entry_mutex);
 }

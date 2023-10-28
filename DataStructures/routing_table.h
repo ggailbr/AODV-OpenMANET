@@ -18,6 +18,35 @@ typedef enum seq_valid_en{
     SEQ_INVALID
 }seq_valid;
 
+/**
+ * @struct routing_entry
+ * @brief Defines the parts stores in a routing entry
+ * 
+ * @var routing_entry::entry_mutex
+ *  A mutex to control access to this routing entry
+ * @var routing_entry::dest_ip
+ *  The destination IP associated with the structure
+ * @var routing_entry::dest_seq
+ *  The known destination sequence number
+ * @var routing_entry::seq_valid
+ *  If the sequence number is valid
+ * @var routing_entry::next_hop
+ *  Where to forward the message to
+ * @var routing_entry::hop_count
+ *  Number of hops until the destination
+ * @var routing_entry::status
+ *  The current status of the route
+ * @var routing_entry::time_out
+ *  A structure containing the time the route will expire
+ * @var routing_entry::precursor_list
+ *  A linked list contining the precursors of the route
+ * @var routing_entry::expiration_thread
+ *  The thread that controls how long the route is valid/alive
+ * @var routing_entry::rreq_id
+ *  The RREQ ID associated with the entry
+ * @var routing_entry::rreq_id_thread
+ *  Keeps the RREQ_ID valid only for a certain amount of time
+ */
 typedef struct{
     pthread_mutex_t entry_mutex;
     uint32_t dest_ip;
@@ -29,8 +58,8 @@ typedef struct{
     struct timespec time_out;
     linked_list *precursor_list;
     pthread_t expiration_thread;
-    pthread_t rreq_thread;
-    pthread_t delete_thread;
+    uint32_t rreq_id;
+    pthread_t rreq_id_thread;
 
 } routing_entry;
 
@@ -46,9 +75,10 @@ typedef data_header routing_table;
  * @param next_hop The next hop towards the destination
  * @param hop_count The current number of hops to the destination
  * @param time_out The time for this route to expire
+ * @param[in] new If the routing entry is new or existing
  * @return The routing entry location (NULL on error)
  */
-routing_entry * create_or_get_routing_entry(routing_table table, uint32_t dest_ip, uint32_t dest_seq, seq_valid valid_seq, uint32_t next_hop, uint32_t hop_count, uint32_t time_out);
+routing_entry * create_or_get_routing_entry(routing_table table, uint32_t dest_ip, uint32_t dest_seq, seq_valid valid_seq, uint32_t next_hop, uint32_t hop_count, uint32_t time_out, uint8_t *new);
 
 /**
  * \brief Makes the base object to hold the routing table
@@ -69,5 +99,9 @@ routing_entry *get_routing_entry(routing_table table, uint32_t dest_ip);
 routing_entry * remove_routing_entry(routing_table table, uint32_t dest_ip);
 
 void free_entry(routing_entry *r_entry);
+
+void expiration_func(routing_entry * own_entry);
+
+void rreq_id_func(routing_entry * own_entry);
 
 #endif // ROUTING_TABLE_H

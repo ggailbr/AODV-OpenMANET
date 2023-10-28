@@ -7,7 +7,7 @@
 #include "rerr.h"
 #include "rreq.h"
 #include "rrep.h"
-#include "api.h"
+#include "manet_testbed.h"
 #include "send_messages.h"
 
 // Configuration Parameters
@@ -55,7 +55,6 @@ extern uint32_t ip_address;
 extern safe_32 rreq_id;
 extern safe_32 sequence_num;
 extern routing_table routes;
-extern rreq_table rreq_ids;
-
+extern uint32_t active_routes;
 
 #endif
