@@ -7,7 +7,6 @@
 #include "rerr.h"
 #include "rreq.h"
 #include "rrep.h"
-#include "rreq_tracker.h"
 #include "api.h"
 #include "send_messages.h"
 
@@ -38,6 +37,10 @@
 #define TTL_VALUE //[TODO]
 #define RING_TRAVERSAL_TIME 2 * NODE_TRAVERSAL_TIME * (TTL_VALUE + TIMEOUT_BUFFER)
 //---------------------------------------------
+
+
+#define max(x, y) x>y?x:y
+#define seq_compare(x, y) (int32_t)x - (int32_t)y
 
 typedef enum packet_type_e{
     RREQ_TYPE = 1u,

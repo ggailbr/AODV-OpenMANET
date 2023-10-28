@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include "debug.h"
+#include "../debug.h"
 
 /*
     This is to allow flexible backend data structures

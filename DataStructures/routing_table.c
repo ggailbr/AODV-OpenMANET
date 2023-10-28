@@ -1,5 +1,7 @@
 #include "routing_table.h"
 #include <stdlib.h>
+#include <time.h>
+#include "time_funcs.h"
 
 uint8_t add_routing_entry(routing_table table, routing_entry *routing_entry);
 routing_entry * remove_routing_entry(routing_table table, uint32_t dest_ip);
@@ -9,47 +11,39 @@ routing_table create_routing_table(){
 }
 
 /**
- * \brief Frees the routing entry
+ * @brief Frees the routing entry
  * 
  * @param r_entry The entry to be freed
  */
 void free_entry(routing_entry *r_entry){
+    pthread_mutex_destroy(&r_entry->entry_mutex);
     free_linked_list(r_entry->precursor_list);
+    pthread_cancel(r_entry->delete_thread);
+    pthread_cancel(r_entry->expiration_thread);
+    pthread_cancel(r_entry->rreq_thread);
     free(r_entry);
 }
 
-char create_or_update_routing_entry(routing_table table, uint32_t dest_ip, uint32_t dest_seq, seq_valid valid_seq, uint32_t next_hop, uint32_t hop_count, uint32_t time_out){
+routing_entry * create_or_get_routing_entry(routing_table table, uint32_t dest_ip, uint32_t dest_seq, seq_valid valid_seq, uint32_t next_hop, uint32_t hop_count, uint32_t time_out){
+    routing_entry * new_entry;
     // First Check if one already exists
-    if(get_routing_entry(table, dest_ip) != NULL){
-
-        return -1;
+    if((new_entry = get_routing_entry(table, dest_ip)) != NULL){
+        return new_entry;
     }
-    routing_entry * new_entry = (routing_entry *) malloc(sizeof(routing_entry));
+    new_entry = (routing_entry *) malloc(sizeof(routing_entry));
     new_entry->dest_ip = dest_ip;
     new_entry->dest_seq = dest_seq;
     new_entry->next_hop = next_hop;
     new_entry->hop_count = hop_count;
     new_entry->seq_valid = valid_seq;
-    new_entry->status = ROUTE_UNCONFIRMED;
-    new_entry->time_out = time_out;
+    new_entry->status = ROUTE_INVALID;
+    clock_gettime(CLOCK_REALTIME, &new_entry->time_out);
+    add_time_ms(&new_entry->time_out,time_out);
     new_entry->precursor_list = (linked_list *) malloc(sizeof(linked_list));
     new_entry->precursor_list->first = NULL;
     new_entry->precursor_list->last = NULL;
     add_routing_entry(table, new_entry);
-    return 0;
-}
-
-route_status set_route_status(routing_table table, uint32_t dest_ip, route_status status){
-    routing_entry *dest_entry = get_routing_entry(table, dest_ip);
-    if(dest_entry == NULL){
-        return NOTHING;
-    }
-    else if(status == NOTHING){
-        return dest_entry->status;
-    }
-    route_status previous = dest_entry->status;
-    dest_entry->status = status;
-    return previous;
+    return new_entry;
 }
 
 char move_routing_entry(routing_table initial, routing_table destination, uint32_t dest_ip){
@@ -70,17 +64,8 @@ char move_routing_entry(routing_table initial, routing_table destination, uint32
     }
 }
 
-int8_t compare_sequence_numbers(routing_table table, uint32_t dest_ip, uint32_t seq_num, uint8_t *error){
-    routing_entry *dest_entry = get_routing_entry(table, dest_ip);
-    if(dest_entry == NULL || dest_entry->seq_valid == SEQ_INVALID){
-        *error = -1;
-        return 0;
-    }
-    return ((int32_t) dest_entry->dest_seq - (int32_t) seq_num);
-}
-
 /**
- * \brief Interfaces between data structure and higher level function. 
+ * @brief Interfaces between data structure and higher level function. 
  *  Adds a routing entry to the table
  * 
  * @param table The table to add the entry to
@@ -95,7 +80,7 @@ uint8_t add_routing_entry(routing_table table, routing_entry *r_entry){
     return add_entry_to_data_structure(table, (void *)r_entry, r_entry->dest_ip);
 }
 /**
- * \brief Interfaces between data structure and higher level function. 
+ * @brief Interfaces between data structure and higher level function. 
  *  Removes a routing entry from the table
  * 
  * @param table The table to remove the entry
@@ -109,3 +94,31 @@ routing_entry *remove_routing_entry(routing_table table, uint32_t dest_ip){
 routing_entry *get_routing_entry(routing_table table, uint32_t dest_ip){
     return (routing_entry *) find_entry_in_data_structure(table, dest_ip);
 }
+
+
+
+
+// -------------Declare routing table specific functions--------------------
+
+// void expiration_func(routing_entry * own_entry){
+//     struct timespec current_time;
+//     clock_gettime(CLOCK_REALTIME, &current_time);
+//     subtract_time(&current_time, &own_entry->time_out);
+//     while(nanosleep(&current_time, &current_time));
+//     pthread_mutex_lock(&own_entry->entry_mutex);
+//     own_entry->status = ROUTE_INVALID;
+//     own_entry->expiration_thread = 0;
+//     check_for_rerr(own_entry);
+//     pthread_mutex_unlock(&own_entry->entry_mutex);
+// }
+
+// void delete_func(routing_entry * own_entry){
+//     struct timespec current_time;
+//     clock_gettime(CLOCK_REALTIME, &current_time);
+//     subtract_time(&current_time, &own_entry->time_out);
+//     while(nanosleep(&current_time, &current_time));
+//     pthread_mutex_lock(&own_entry->entry_mutex);
+//     pthread_mutex_unlock(&own_entry->entry_mutex);
+//     free_entry(remove_routing_entry(routes, own_entry->dest_ip));
+
+// }

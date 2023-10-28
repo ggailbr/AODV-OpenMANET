@@ -6,7 +6,6 @@ uint32_t ip_address = 0xC4A80007;
 safe_32 rreq_id;
 safe_32 sequence_num;
 routing_table routes;
-rreq_table rreq_ids;
 /*
  * This is a protocol main function. This is run once at the start 
  * of route creation. 
@@ -44,22 +43,59 @@ int incoming_message(uint8_t *buf){
     uint32_t ttl = get_packet_ttl(buf);
     switch(type){
         case(RREQ_TYPE):
+            /*
+                On Incoming RREQ:
+                1) Create an entry for the previous hop
+                2) Increment the hop count of the message
+                3) Create/update a reverse route back to origin
+                4) Check for duplicate RREQID/IP
+                    4a) If duplicate, but destination look for lower hop count
+                5) If destination, send RREP
+                6) Check for "fresh enough" route to destination
+                7) If no fresh route, check TTL and forward
+            */
+
+            // Converting Packet Body into RREQ Message
+            ;
             rreq_header *message = (rreq_header *) buf;
-            // Create/Update route to previous hop
-            create_or_update_routing_entry(routes, sender_ip, 0, SEQ_INVALID, sender_ip, 0, MY_ROUTE_TIMEOUT);
-            // If this message was seen by us recently
-            if(is_in_rreq_table(rreq_ids, message->src_ip, message->rreq_id)){
-                // ignore the message
-                return 0;
-            }
+
+            // Create route to previous hop
+            // [TODO] Update Timeout/entry
+            routing_entry * previous_hop = create_or_get_routing_entry(routes, sender_ip, 0, SEQ_INVALID, sender_ip, 0, MY_ROUTE_TIMEOUT);
+            update_routing_entry(previous_hop, sender_ip, 0, SEQ_INVALID, 0);
+            // [TODO]
+            set_expiration_timer(previous_hop, ACTIVE_ROUTE_TIMEOUT);
+
             // Increment Hop Count
             increment_hop_rreq(buf);
-            // Create/Update route to origin
-            create_or_update_routing_entry(routes, message->src_ip, message->src_seq, SEQ_VALID, sender_ip, message->hop_count, MY_ROUTE_TIMEOUT);
+            uint32_t hop_count = message->hop_count;
+
+            // Create/Update Reverse Route
+            // [TODO] Update Timeout
+            routing_entry * origin_entry = create_or_get_routing_entry(routes, message->src_ip, message->src_seq, SEQ_VALID, sender_ip, message->hop_count, MY_ROUTE_TIMEOUT);
+            update_routing_entry(origin_entry, sender_ip, message->src_seq, SEQ_VALID, hop_count - 1);
+            // [TODO]
+            // Set to the maximum of existing and Minimal Lifetime
+            set_expiration_timer(origin_entry, ACTIVE_ROUTE_TIMEOUT);
+            origin_entry->status = ROUTE_VALID;
+
+            // Check if it was recently seen
+            if(is_in_rreq_table(rreq_ids, message->src_ip, message->rreq_id)){
+                // If it was recently seen, but this is the destination and the hop count is lower
+                if(message->dest_ip == ip_address && message->hop_count < origin_entry->hop_count){
+                    // [TODO] Update routing entry
+                }
+                return 0;
+            }
+            
             // Check if we are the destination
             if(message->dest_ip == ip_address){
                 set_route_status(routes, message->src_ip, ROUTE_VALID);
-                send_rrep_destination(message);
+                // // I.E the new hopcount was smaller than the previous one
+                // // OR the current hop count is the only one (just got the message)
+                // if(origin_entry->hop_count == hop_count){
+                //     send_rrep_destination(message);
+                // }
                 return 0;
             }
             uint8_t error;
@@ -70,6 +106,7 @@ int incoming_message(uint8_t *buf){
                 set_route_status(routes, message->dest_ip, NOTHING) == ROUTE_VALID){
                 add_rreq_entry(rreq_ids, message->src_ip, message->rreq_id);
                 send_rrep_intermediate(message, sender_ip);
+                return 0;
             }
             if(ttl <= 1){
                 return 0;

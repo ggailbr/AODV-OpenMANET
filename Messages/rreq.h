@@ -22,7 +22,7 @@
 
 /**
  * \struct rreq_message
- * \brief The constant header for a RREQ Message Format
+ * @brief The constant header for a RREQ Message Format
  * \var rreq_header::type
  *  The type of message, should be 1
  * \var rreq_header::flags
@@ -73,7 +73,7 @@ typedef struct rreq_header_t{
     #endif
 } rreq_header;
 /**
- * \brief Generates a fresh RREQ Message. This should only be done by the originator
+ * @brief Generates a fresh RREQ Message. This should only be done by the originator
  *  The RREQ ID MUST be incremented prior to calling this function
  *  The originator sequence number MUST be incremented prior to calling this function
  * 
@@ -91,7 +91,7 @@ typedef struct rreq_header_t{
 uint8_t *generate_rreq_message(uint8_t flags, uint32_t rreq_id, uint32_t dest_ip, uint32_t dest_seq, uint32_t origin_ip, uint32_t origin_seq);
 
 /**
- * \brief Increments the hop count in an existing message
+ * @brief Increments the hop count in an existing message
  *  This is the only thing that should be done by intermediate nodes
  * 
  * @param received_packet The buffer of data to increment
