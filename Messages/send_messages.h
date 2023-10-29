@@ -7,7 +7,7 @@
 #include "routing_table.h"
 #include "AODV.h"
 
-void send_rrep_destination(rreq_header *message);
+void send_rrep_destination(rreq_header *message, uint32_t sender_ip);
 void send_rrep_intermediate(rreq_header *message, uint32_t sender);
 
 #endif

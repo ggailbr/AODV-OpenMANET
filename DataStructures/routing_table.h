@@ -9,13 +9,13 @@
 #include "linked_list.h"
 
 typedef enum route_status_en{
-    ROUTE_VALID = 0,
-    ROUTE_INVALID = 1,
+    ROUTE_VALID = 1,
+    ROUTE_INVALID = 0,
 }route_status;
 
 typedef enum seq_valid_en{
-    SEQ_VALID,
-    SEQ_INVALID
+    SEQ_VALID = 1,
+    SEQ_INVALID = 0
 }seq_valid;
 
 /**
@@ -46,6 +46,8 @@ typedef enum seq_valid_en{
  *  The RREQ ID associated with the entry
  * @var routing_entry::rreq_id_thread
  *  Keeps the RREQ_ID valid only for a certain amount of time
+ * @var routing_entry::rreq_message_sender
+ *  Thread that sends RREQ messages until either timeout or RREP
  */
 typedef struct{
     pthread_mutex_t entry_mutex;
@@ -60,6 +62,7 @@ typedef struct{
     pthread_t expiration_thread;
     uint32_t rreq_id;
     pthread_t rreq_id_thread;
+    pthread_t rreq_message_sender;
 
 } routing_entry;
 

@@ -78,9 +78,10 @@ typedef struct rrep_header_t{
  *      Should be the newest sequence number:
  *          Either the max of the RREQ and current number
  * @param origin_ip The originator of the corresponding RREQ
+ * @param time_out The timeout field of the rrep
  * @return 
  */
-uint8_t * generate_rrep_message( uint8_t flags, uint8_t prefix_size, uint32_t dest_ip, uint32_t dest_seq, uint32_t origin_ip);
+uint8_t * generate_rrep_message( uint8_t flags, uint8_t prefix_size, uint32_t dest_ip, uint32_t dest_seq, uint32_t origin_ip, uint32_t life_time);
 
 void increment_hop_rrep(uint8_t *received_packet);
 

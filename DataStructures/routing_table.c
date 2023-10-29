@@ -18,6 +18,7 @@ routing_table create_routing_table(){
 void free_entry(routing_entry *r_entry){
     pthread_cancel(r_entry->expiration_thread);
     pthread_cancel(r_entry->rreq_id_thread);
+    pthread_cancel(r_entry->rreq_message_sender);
     pthread_mutex_destroy(&r_entry->entry_mutex);
     free_linked_list(r_entry->precursor_list);
     free(r_entry);

@@ -27,8 +27,8 @@
  *  The type of message, should be 1
  * \var rreq_header::flags
  *  A bit field containing the different flags for an RREQ message
- * \var rreq_header::reserved
- *  No use yet, should be sent as 0
+ * \var rreq_header::ttl
+ *  Repurposing reserved bits as ttl
  * \var rreq_header::hop_count
  *  Number of hops from originator IP address to node handling the request
  * \var rreq_header::rreq_id
@@ -50,7 +50,7 @@ typedef struct rreq_header_t{
     #if __BYTE_ORDER == __BIG_ENDIAN
     uint32_t type : 8;
     uint32_t flags : 5;
-    uint32_t reserved : 11;
+    uint32_t ttl : 11;
     uint32_t hop_count : 8;
     uint32_t rreq_id;
     uint32_t dest_ip;
@@ -60,7 +60,7 @@ typedef struct rreq_header_t{
 
     #elif __BYTE_ORDER == __LITTLE_ENDIAN
     uint32_t hop_count : 8;
-    uint32_t reserved : 11;
+    uint32_t ttl : 11;
     uint32_t flags : 5;
     uint32_t type : 8;
     uint32_t rreq_id;

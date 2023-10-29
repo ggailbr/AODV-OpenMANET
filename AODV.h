@@ -40,6 +40,18 @@
 
 
 #define max(x, y) x>y?x:y
+/*
+    In order to ascertain that information about a destination is not
+   stale, the node compares its current numerical value for the sequence
+   number with that obtained from the incoming AODV message.  This
+   comparison MUST be done using signed 32-bit arithmetic, this is
+   necessary to accomplish sequence number rollover.  If the result of
+   subtracting the currently stored sequence number from the value of
+   the incoming sequence number is less than zero, then the information
+   related to that destination in the AODV message MUST be discarded,
+   since that information is stale compared to the node's currently
+   stored information.
+*/
 #define seq_compare(x, y) (int32_t)x - (int32_t)y
 
 typedef enum packet_type_e{
