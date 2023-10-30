@@ -18,6 +18,13 @@ typedef enum seq_valid_en{
     SEQ_INVALID = 0
 }seq_valid;
 
+typedef enum rreq_status_en{
+    SEARCH_FOUND = 1,
+    SEARCH_FAILED = 0,
+    SEARCH_NONE = 2,
+    SEARCH_SEARCHING = 3
+}rreq_status;
+
 /**
  * @struct routing_entry
  * @brief Defines the parts stores in a routing entry
@@ -46,6 +53,8 @@ typedef enum seq_valid_en{
  *  The RREQ ID associated with the entry
  * @var routing_entry::rreq_id_thread
  *  Keeps the RREQ_ID valid only for a certain amount of time
+ * @var routint_entry::rreq_search
+ *  The status of the search for route
  * @var routing_entry::rreq_message_sender
  *  Thread that sends RREQ messages until either timeout or RREP
  */
@@ -62,6 +71,7 @@ typedef struct{
     pthread_t expiration_thread;
     uint32_t rreq_id;
     pthread_t rreq_id_thread;
+    volatile rreq_status rreq_search;
     pthread_t rreq_message_sender;
 
 } routing_entry;

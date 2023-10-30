@@ -40,6 +40,7 @@ routing_entry * create_or_get_routing_entry(routing_table table, uint32_t dest_i
     new_entry->hop_count = hop_count;
     new_entry->seq_valid = valid_seq;
     new_entry->status = ROUTE_INVALID;
+    new_entry->rreq_search = SEARCH_NONE;
     clock_gettime(CLOCK_REALTIME, &new_entry->time_out);
     add_time_ms(&new_entry->time_out,time_out);
     new_entry->precursor_list = (linked_list *) malloc(sizeof(linked_list));

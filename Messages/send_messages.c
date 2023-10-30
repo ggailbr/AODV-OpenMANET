@@ -1,6 +1,10 @@
 #include "send_messages.h"
 #include "time_funcs.h"
+#include <pthread.h>
+#include <sched.h>
 
+
+void send_rreq_thread(routing_entry * dest_entry);
 
 /**
  * @brief The routine for sending an rrep from the destionation. Sends
@@ -90,31 +94,116 @@ void send_rrep_intermediate(rreq_header *message, uint32_t sender){
 }
 
 /**
+ * @brief Sends the rreq requires from the originator
+ *  Sets up the inital variables before starting a timing thread
+ * 
+ * @param dest_addr The address to send the message to
+ * @return If a route has been found (1) or it failed (0)
+ */
+uint8_t send_rreq(uint32_t dest_addr){
+    uint8_t new;
+    rreq_status outcome = SEARCH_NONE;
+    routing_entry * dest_entry = create_or_get_routing_entry(routes, dest_addr, 0, SEQ_INVALID, 0, 0, MY_ROUTE_TIMEOUT, &new);
+    // Not starting expiration function
+    if(new == 0){
+        if(!(dest_entry->expiration_thread == NULL)){
+            pthread_cancel(dest_entry->expiration_thread);
+        }
+        dest_entry->expiration_thread = NULL;
+    }
+
+    // Locking entry and starting rreq thread
+    pthread_mutex_lock(&dest_entry->entry_mutex);
+    // Start the search
+    pthread_create(&dest_entry->rreq_message_sender, NULL, send_rreq_thread, (void *) dest_entry);
+    // Set the status to searching
+    dest_entry->rreq_search = SEARCH_SEARCHING;
+    pthread_mutex_unlock(&dest_entry->entry_mutex);
+
+    // Wait until we are no longer searching
+    // [TODO] Update
+    while(dest_entry->rreq_search == SEARCH_SEARCHING){
+        sched_yield();
+    }
+    // Check the status 
+    pthread_mutex_lock(&dest_entry->entry_mutex);
+    outcome = dest_entry->rreq_search;
+    pthread_mutex_unlock(&dest_entry->entry_mutex);
+
+    // If it was a failure
+    if(outcome == SEARCH_FAILED){
+        // Drop Packet
+        return 0;
+    }
+    else{
+        // Accept Packets
+        return 1;
+    }
+
+}
+
+
+/**
  * @brief The thread function to send the rreq message
  *  This will continually send rreq's until a rrep
  *  results in the termination of the thread
  * 
  * @param dest_entry The destination entry to send the rreq for
  */
-void send_rreq(routing_entry * dest_entry){
-    uint32_t ttl = TTL_START;
-    while(ttl <= TTL_)
-    // Incrementing id and sequence number
-    uint32_t id = increment_safe(&rreq_id);
+void send_rreq_thread(routing_entry * dest_entry){
+    // Assuming the sequence number should only be incremented
+    //  at start of attempting to send
     uint32_t seq = increment_safe(&sequence_num);
-    // Setting all to be gratuitous by default
+
+    // Grab Destination mutex and info
+    pthread_mutex_lock(&dest_entry->entry_mutex);
     uint8_t flags = RREQ_GRAT;
-    // Setting the sequence number for the destination
+    // Grabbing known hop_count if present
+    uint32_t hop_count = dest_entry->hop_count;
+    // Grabbing the destination sequence number (if known)
     uint32_t dest_seq = 0;
-    if(dest_entry == NULL || dest_entry->seq_valid != SEQ_VALID){
+    if(dest_entry->seq_valid == SEQ_INVALID){
         flags |= RREQ_UNKNOWN;
     }
     else{
         dest_seq = dest_entry->dest_seq;
     }
-    uint8_t *rreq_message = generate_rreq_message(flags, id, dest_ip, dest_seq, src_ip, seq);
-    // [TODO]
-    // set_ttl();
-    SendBroadcast(rreq_message, NULL);
+    // Generate base message
+    uint8_t * rreq_buff = generate_rreq_message(flags, seq, dest_entry->dest_ip, dest_entry->dest_seq, ip_address, seq);
+    // Ensure memory is freed
+    pthread_cleanup_push(free, rreq_buff);
+    pthread_mutex_unlock(&dest_entry->entry_mutex);
+
+    // Cast message to header type for indexing
+    rreq_header * rreq_message = (rreq_header * )rreq_buff;
+    struct timespec wait_time;
+
+    uint32_t ttl = 0;
+    // Starting at either TTL_start of hop_count + TTL_INCREMENT
+    // Goes until it hits the threshold
+    for(ttl = max(TTL_START, hop_count) == hop_count? hop_count + TTL_INCREMENT : TTL_START; ttl <= TTL_THRESHOLD; ttl += TTL_INCREMENT){
+        // Incrementing id
+        rreq_message->rreq_id = increment_safe(&rreq_id);
+        rreq_message->ttl = ttl;
+        SendBroadcast(rreq_message, NULL);
+        convert_ms_to_timespec(&wait_time, RING_TRAVERSAL_TIME(ttl));
+    }
+    ttl = NET_DIAMETER;
+    uint32_t fall_off = 1;
+    for(uint32_t i = 0; i <= RREQ_RETRIES; i++){
+        rreq_message->rreq_id = increment_safe(&rreq_id);
+        rreq_message->ttl = ttl;
+        SendBroadcast(rreq_message, NULL);
+        convert_ms_to_timespec(&wait_time, NET_TRAVERSAL_TIME * (fall_off << i));
+    }
+    // Start expiration thread on failure
+    pthread_mutex_lock(&dest_entry->entry_mutex);
+    dest_entry->rreq_message_sender = NULL;
+    dest_entry->rreq_search == SEARCH_FAILED;
+    set_expiration_timer(dest_entry, 2 * NET_TRAVERSAL_TIME);
+    pthread_mutex_unlock(&dest_entry->entry_mutex);
+
+    // exiting to call cleanup functions
+    pthread_exit(NULL);
 }
 

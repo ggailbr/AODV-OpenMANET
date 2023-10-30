@@ -4,7 +4,7 @@ uint8_t *generate_rreq_message(uint8_t flags, uint32_t rreq_id, uint32_t dest_ip
     rreq_header * header = (rreq_header *)malloc(sizeof(rreq_header));
     header->type = RREQ_TYPE;
     header->flags = flags;
-    header->reserved = 0x0;
+    header->ttl = 0x0;
     header->hop_count = 0;
     header->rreq_id = rreq_id;
     header->dest_ip = dest_ip;

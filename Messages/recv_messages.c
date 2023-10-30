@@ -101,6 +101,7 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
         originator->hop_count = rreq_message->hop_count;
     }
     // Add to the routing table
+    originator->status = ROUTE_VALID;
     AddUnicastRoutingEntry(sender_ip, sender_ip);
     // Calculate minimal time
     struct timespec minimal_lifetime, current_time;
@@ -154,6 +155,8 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
     routing_entry * destination = get_routing_entry(routes ,rrep_message->dest_ip);
     if(ip_address == rrep_message->src_ip && destination != NULL){
         pthread_mutex_lock(&destination->entry_mutex);
+        // Signal a route has been found
+        destination->rreq_search = SEARCH_FOUND;
         pthread_cancel(destination->rreq_message_sender);
         destination->rreq_message_sender = NULL;
         pthread_mutex_unlock(&destination->entry_mutex);
@@ -236,6 +239,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
     else{
         set_expiration_timer(destination, rrep_message->lifetime);
     }
+    destination->status = ROUTE_VALID;
     AddUnicastRoutingEntry(rrep_message->dest_ip, sender_ip);
     // If we are not the originator of the rreq, add precursors
     if(ip_address != rrep_message->src_ip){

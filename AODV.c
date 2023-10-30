@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include "AODV.h"
 #include "recv_messages.h"
+#include "routing_table.h"
+
 // [CHANGE] Manually setting for now, should be changed to the dynamic interface IP
 uint32_t ip_address = 0xC4A80007;
 safe_32 rreq_id;
@@ -29,7 +31,7 @@ int main(int argc, char **argv){
     pthread_mutex_init(&rreq_id.mutex, NULL);
     pthread_mutex_init(&sequence_num.mutex, NULL);
     // Start the API
-    InitializeApi();
+    InitializeAPI();
     // Set interface
     SetInterface("wlan0");
     ip_address = GetInterfaceIP("wlan0", 0);
@@ -46,17 +48,14 @@ int main(int argc, char **argv){
 /* 
  * This function is called each time a message is received
 */
-int incoming_message(uint8_t *buf){
-    packet_type type = get_packet_type(buf);
-    uint32_t lenth = get_packet_length(buf);
-    uint32_t sender_ip = get_packet_sender(buf);
-    uint32_t ttl = get_packet_ttl(buf);
+int incoming_message(uint32_t sender_ip, uint8_t *body){
+    packet_type type = body[0];
     switch(type){
         case(RREQ_TYPE):
-            return recv_rreq(ttl, sender_ip, (rreq_header *) get_body(buf));
+            return recv_rreq(sender_ip, (rreq_header *) body);
             break;
         case(RREP_TYPE):
-            return recv_rrep(sender_ip, (rrep_header *) get_body(buf));
+            return recv_rrep(sender_ip, (rrep_header *) body);
             break;
         case(RERR_TYPE):
             break;
