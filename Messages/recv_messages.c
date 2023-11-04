@@ -13,6 +13,8 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
     // Set that as a valid route
     pthread_mutex_lock(&previous_hop->entry_mutex);
     previous_hop->status = ROUTE_VALID;
+    // Adding the src to the next_hop list
+    add_entry_to_list(previous_hop->next_hop_for, rreq_message->src_ip);
     // Add to the routing table
     AddUnicastRoutingEntry(sender_ip, sender_ip);
     // If this is an existing entry, reset expiration
@@ -241,6 +243,18 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
     }
     destination->status = ROUTE_VALID;
     AddUnicastRoutingEntry(rrep_message->dest_ip, sender_ip);
+    // If this is a hello message
+    if(rrep_message->src_ip = 0x0){
+        pthread_mutex_unlock(&destination->entry_mutex);
+        if(rrep_message->flags & RREP_ACK != 0){
+            //[TODO]
+            return 0;
+        }
+    }
+    else{
+        active_routes++;
+    }
+    
     // If we are not the originator of the rreq, add precursors
     if(ip_address != rrep_message->src_ip){
         routing_entry * originator = get_routing_entry(routes, rrep_message->src_ip);

@@ -68,6 +68,7 @@ typedef struct{
     route_status status;
     struct timespec time_out;
     linked_list *precursor_list;
+    linked_list *next_hop_for;
     pthread_t expiration_thread;
     uint32_t rreq_id;
     pthread_t rreq_id_thread;

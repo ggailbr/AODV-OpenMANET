@@ -121,7 +121,7 @@ uint8_t send_rreq(uint32_t dest_addr){
     pthread_mutex_unlock(&dest_entry->entry_mutex);
 
     // Wait until we are no longer searching
-    // [TODO] Update
+    // [TODO] Could be better
     while(dest_entry->rreq_search == SEARCH_SEARCHING){
         sched_yield();
     }

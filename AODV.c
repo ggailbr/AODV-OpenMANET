@@ -3,14 +3,17 @@
 #include <stdio.h>
 #include "AODV.h"
 #include "recv_messages.h"
+#include "rrep.h"
 #include "routing_table.h"
+#include <time.h>
+#include "time_funcs.h"
 
 // [CHANGE] Manually setting for now, should be changed to the dynamic interface IP
 uint32_t ip_address = 0xC4A80007;
 safe_32 rreq_id;
 safe_32 sequence_num;
 routing_table routes;
-uint32_t active_routes = 0;
+volatile uint32_t active_routes = 0;
 /*
  * This is a protocol main function. This is run once at the start 
  * of route creation. 
@@ -19,7 +22,7 @@ uint32_t active_routes = 0;
 /*
 Protocol Prototypes representing undelying functions not yet implemented
 */
-
+void hello_interval();
 
 int main(int argc, char **argv){
     // Start routing table
@@ -60,6 +63,8 @@ int incoming_message(uint32_t sender_ip, uint8_t *body){
         case(RERR_TYPE):
             break;
         case(RREP_ACK_TYPE):
+            // UNIMPLEMENTED
+            // Mark Route as Bidirectional
             break;
         default:
             debprintf("[ERROR] : Unknown Packet Type");
@@ -67,6 +72,24 @@ int incoming_message(uint32_t sender_ip, uint8_t *body){
     return 0;
 }
 
-int outgoing_message(){
+int outgoing_message(uint32_t dest_ip, uint8_t *body){
     return 0;
+}
+
+void hello_interval(){
+    struct timespec current_time;
+    uint32_t seq = read_safe(&sequence_num);   
+    uint8_t *rrep_buf = generate_rrep_message(0, 0, ip_address, seq, 0x0, ALLOWED_HELLO_LOSS * HELLO_INTERVAL);
+    rrep_header * rrep_message = (rrep_header *)rrep_buf;
+    while(1){
+        while(active_routes == 0);
+        convert_ms_to_timespec(&current_time, HELLO_INTERVAL);
+        while(nanosleep(&current_time, &current_time));
+        seq = read_safe(&sequence_num);   
+        rrep_message->dest_seq = seq;
+        // Send it back along sender's path
+        SendBroadcast(rrep_buf, NULL);
+    }
+    // Free the message buffer made
+    free(rrep_buf);
 }

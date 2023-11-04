@@ -16,11 +16,12 @@ routing_table create_routing_table(){
  * @param r_entry The entry to be freed
  */
 void free_entry(routing_entry *r_entry){
-    pthread_cancel(r_entry->expiration_thread);
+    //pthread_cancel(r_entry->expiration_thread);
     pthread_cancel(r_entry->rreq_id_thread);
     pthread_cancel(r_entry->rreq_message_sender);
     pthread_mutex_destroy(&r_entry->entry_mutex);
     free_linked_list(r_entry->precursor_list);
+    free_linked_list(r_entry->next_hop_for);
     free(r_entry);
 }
 
@@ -46,6 +47,9 @@ routing_entry * create_or_get_routing_entry(routing_table table, uint32_t dest_i
     new_entry->precursor_list = (linked_list *) malloc(sizeof(linked_list));
     new_entry->precursor_list->first = NULL;
     new_entry->precursor_list->last = NULL;
+    new_entry->next_hop_for = (linked_list *) malloc(sizeof(linked_list));
+    new_entry->next_hop_for->first = NULL;
+    new_entry->next_hop_for->last = NULL;
     add_routing_entry(table, new_entry);
     return new_entry;
 }
@@ -58,6 +62,7 @@ char move_routing_entry(routing_table initial, routing_table destination, uint32
             return 0;
         }
         else{
+            pthread_cancel(destination_entry->expiration_thread);
             free_entry(destination_entry);
             return 1;
         }
@@ -130,6 +135,9 @@ void expiration_func(routing_entry * own_entry){
     // Delete Routing Table Entry
     DeleteEntry(own_entry->dest_ip, own_entry->next_hop);
     // Send out Rerrs
+    if(active_routes > 0){
+        active_routes--;
+    }
     // [TODO]
     // Restart with delete timer
     clock_gettime(CLOCK_REALTIME, &own_entry->time_out);

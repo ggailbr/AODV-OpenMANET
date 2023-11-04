@@ -31,7 +31,7 @@ void add_entry_to_list(linked_list * list, uint32_t data){
     new_entry->prev = NULL;
     // The only entry
     if(list->first == NULL){
-        list->first = list->last = new_entry;
+        list->first = (list->last = new_entry);
     }
     else{
         list->last->next = new_entry;
@@ -51,7 +51,7 @@ void remove_entry_from_list(linked_list * list, uint32_t data){
         // If it is the only entry in the list
         if(test_entry->next == NULL){
             free(test_entry);
-            list->first = list->last = NULL;
+            list->first = (list->last = NULL);
             return;
         }
         list->first = test_entry->next;
