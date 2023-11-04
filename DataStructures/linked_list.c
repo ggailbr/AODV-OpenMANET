@@ -100,3 +100,13 @@ uint32_t * get_all_entries(linked_list * list, uint32_t *size){
     }
     return ret_array;
 }
+
+uint8_t is_in_list(linked_list * list, uint32_t data){
+    linked_entry *current_entry = list->first;
+    while(current_entry != NULL){
+        if(current_entry->data == data)
+            return 1;
+        current_entry = current_entry->next;
+    }
+    return 0;
+}

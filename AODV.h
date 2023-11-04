@@ -10,6 +10,10 @@
 #include "manet_testbed.h"
 #include "send_messages.h"
 
+
+#define LOGGING 0
+#define HELLO_MESSAGES
+
 // Configuration Parameters
 //---------------------------------------------
 // In ms
@@ -66,6 +70,6 @@ extern uint32_t ip_address;
 extern safe_32 rreq_id;
 extern safe_32 sequence_num;
 extern routing_table routes;
-extern uint32_t active_routes;
+extern volatile uint32_t active_routes;
 
 #endif

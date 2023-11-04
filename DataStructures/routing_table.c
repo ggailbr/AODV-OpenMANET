@@ -134,11 +134,11 @@ void expiration_func(routing_entry * own_entry){
     own_entry->status = ROUTE_INVALID;
     // Delete Routing Table Entry
     DeleteEntry(own_entry->dest_ip, own_entry->next_hop);
-    // Send out Rerrs
-    if(active_routes > 0){
+
+    if(active_routes > 0 && own_entry->seq_valid == SEQ_VALID){
         active_routes--;
     }
-    // [TODO]
+
     // Restart with delete timer
     clock_gettime(CLOCK_REALTIME, &own_entry->time_out);
     add_time_ms(&own_entry->time_out, DELETE_PERIOD);

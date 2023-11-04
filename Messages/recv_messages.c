@@ -14,7 +14,9 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
     pthread_mutex_lock(&previous_hop->entry_mutex);
     previous_hop->status = ROUTE_VALID;
     // Adding the src to the next_hop list
-    add_entry_to_list(previous_hop->next_hop_for, rreq_message->src_ip);
+    if(is_in_list(previous_hop->next_hop_for, rreq_message->src_ip) == 0){
+        add_entry_to_list(previous_hop->next_hop_for, rreq_message->src_ip);
+    }
     // Add to the routing table
     AddUnicastRoutingEntry(sender_ip, sender_ip);
     // If this is an existing entry, reset expiration
@@ -30,7 +32,7 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
     // If this is our RREQ
     // Prevent retransmission of our own RREQ
     if(rreq_message->src_ip == ip_address){
-        return 0;
+        return LOGGING;
     }
 
     // Check for RREQ ID
@@ -40,11 +42,11 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
         // If we have already seen this RREQID, ignore it
         // Unless we are the destination
         if(originator->rreq_id == rreq_message->rreq_id && ip_address != rreq_message->dest_ip){
-            return 0;
+            return LOGGING;
         }
         // Ignore if repeat and not better than current route
         else if(originator->rreq_id == rreq_message->rreq_id &&ip_address == rreq_message->dest_ip && originator->hop_count <= rreq_message->hop_count){
-            return 0;
+            return LOGGING;
         }
     }
 
@@ -118,7 +120,7 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
     // If we are destination, now that we have installed the route, send a rrep and return
     if(ip_address == rreq_message->dest_ip){
         send_rrep_destination(rreq_message, sender_ip);
-        return 0;
+        return LOGGING;
     }
     // Check for active route. If active and "d" not set, send from intermediate
     routing_entry * destination = get_routing_entry(routes, rreq_message->dest_ip);
@@ -133,12 +135,15 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
         */ 
         if(destination != NULL && destination->status == ROUTE_VALID && destination->seq_valid == SEQ_VALID && (rreq_message->flags & RREQ_UNKNOWN != 0 || seq_compare(rreq_message->dest_seq, destination->dest_seq) < 0)){
             send_rrep_intermediate(rreq_message, sender_ip);
-            return 0;
+            return LOGGING;
         }
     }
-    // If does not send a RREP
+    // ---------------------------
+    // | If does not send a RREP |
+    // ---------------------------
+
     if(rreq_message->ttl <= 1){
-        return 0;
+        return LOGGING;
     }
     // Decrement ttl
     rreq_message->ttl--;
@@ -149,12 +154,13 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
     if(destination != NULL && destination->seq_valid == SEQ_VALID && (rreq_message->flags & RREQ_UNKNOWN != 0 || seq_compare(rreq_message->dest_seq, destination->dest_seq) < 0))
         rreq_message->dest_seq = destination->dest_seq;
     SendBroadcast(rreq_message, NULL);
-    return 0;
+    return LOGGING;
 }
 
 uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
     // If we are the originator of rreq, immediately stop rreq thread
     routing_entry * destination = get_routing_entry(routes ,rrep_message->dest_ip);
+    // (Can be NULL in the case of a HELLO message)
     if(ip_address == rrep_message->src_ip && destination != NULL){
         pthread_mutex_lock(&destination->entry_mutex);
         // Signal a route has been found
@@ -166,22 +172,30 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
 
     // Create route to previous hop
     uint8_t new = 0;
-    // Get entry to sender
-    routing_entry * previous_hop = create_or_get_routing_entry(routes, sender_ip, 0, SEQ_INVALID, sender_ip, 0, ACTIVE_ROUTE_TIMEOUT, &new);
-    // Set that as a valid route
-    pthread_mutex_lock(&previous_hop->entry_mutex);
-    previous_hop->status = ROUTE_VALID;
-    // Add to the routing table
-    AddUnicastRoutingEntry(sender_ip, sender_ip);
-    // If this is an existing entry, reset expiration
-    if(new == 0){
-        // May not need
-        clock_gettime(CLOCK_REALTIME, &previous_hop->time_out);
-        add_time_ms(&previous_hop->time_out, ACTIVE_ROUTE_TIMEOUT);
+    // Check if this is a hello message
+    if(rrep_message->src_ip != 0x0){
+        // Get entry to sender
+        routing_entry * previous_hop = create_or_get_routing_entry(routes, sender_ip, 0, SEQ_INVALID, sender_ip, 0, ACTIVE_ROUTE_TIMEOUT, &new);
+        // Set that as a valid route
+        pthread_mutex_lock(&previous_hop->entry_mutex);
+        previous_hop->status = ROUTE_VALID;
+        // Add to the routing table
+        AddUnicastRoutingEntry(sender_ip, sender_ip);
+        // Creating a List of where this is next hop for
+        if(is_in_list(previous_hop->next_hop_for, rrep_message->dest_ip) == 0){
+            add_entry_to_list(previous_hop->next_hop_for, rrep_message->dest_ip);
+        }
+
+        // If this is an existing entry, reset expiration
+        if(new == 0){
+            // May not need
+            clock_gettime(CLOCK_REALTIME, &previous_hop->time_out);
+            add_time_ms(&previous_hop->time_out, ACTIVE_ROUTE_TIMEOUT);
+        }
+        // (Re)Start the expiration timer for the previous hop
+        set_expiration_timer(previous_hop, 0);
+        pthread_mutex_unlock(&previous_hop->entry_mutex);
     }
-    // (Re)Start the expiration timer for the previous hop
-    set_expiration_timer(previous_hop, 0);
-    pthread_mutex_unlock(&previous_hop->entry_mutex);
 
     // Increment hop in rrep
     increment_hop_rrep(rrep_message);
@@ -243,13 +257,16 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
     }
     destination->status = ROUTE_VALID;
     AddUnicastRoutingEntry(rrep_message->dest_ip, sender_ip);
+
     // If this is a hello message
-    if(rrep_message->src_ip = 0x0){
+    if(rrep_message->src_ip == 0x0){
         pthread_mutex_unlock(&destination->entry_mutex);
+        // If we require an ack
         if(rrep_message->flags & RREP_ACK != 0){
             //[TODO]
-            return 0;
+            return LOGGING;
         }
+        return LOGGING;
     }
     else{
         active_routes++;
@@ -273,8 +290,76 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
     // If we need to acknowledge
     if(rrep_message->flags & RREP_ACK != 0){
         //[TODO]
-        return 0;
+        return LOGGING;
     }
 
-    return 0;
+    return LOGGING;
+}
+
+uint8_t recv_rerr(uint32_t sender_ip, uint8_t * rerr_message){
+    // Seperating out the header and the pairs
+    rerr_header * rerr_message_header = (rerr_header *) rerr_message;
+    uint32_t *dest_pairs = &rerr_message[sizeof(rerr_header)];
+
+    /*
+        destinations in the RERR
+        for which there exists a corresponding entry in the local routing
+        table that has the transmitter of the received RERR as the next hop.
+    */
+    routing_entry * invalid_dest = NULL;
+    uint32_t single_rerr = 0;
+    uint8_t broadcast_rerr = 0, num_dests = 0;
+    uint32_t *dest_ip_seq_pairs = (uint32_t *) malloc(sizeof(uint32_t) * 2 * rerr_message_header->dest_count);
+    for(uint8_t i = 0; i < rerr_message_header->dest_count; i++){
+        // Get the routing entry for the destination
+        invalid_dest = get_routing_entry(routes, dest_pairs[i*2]);
+        // If there is an entry and the sender is the next_hop
+        if(invalid_dest != NULL && invalid_dest->next_hop == sender_ip && invalid_dest->status == ROUTE_VALID){
+            pthread_mutex_lock(&invalid_dest->entry_mutex);
+            // Check for precursors
+            if(invalid_dest->precursor_list->first != NULL){
+                if(invalid_dest->precursor_list->first == invalid_dest->precursor_list->last && single_rerr == 0){
+                    single_rerr = invalid_dest->precursor_list->first->data;
+                }
+                else{
+                    broadcast_rerr = 1;
+                }
+                // Storing the pairs to resend
+                dest_ip_seq_pairs[num_dests] = invalid_dest->dest_ip;
+                dest_ip_seq_pairs[num_dests + 1] = dest_pairs[(i*2) + 1];
+                num_dests += 2;
+            }
+            /*
+            1. The destination sequence number of this routing entry, if it
+                exists and is valid, is incremented for cases (i) and (ii) above,
+                and copied from the incoming RERR in case (iii) above.
+
+            2. The entry is invalidated by marking the route entry as invalid
+
+            3. The Lifetime field is updated to current time plus DELETE_PERIOD.
+                Before this time, the entry SHOULD NOT be deleted.
+            */
+            invalid_dest->dest_seq = dest_pairs[(i*2) + 1];
+            DeleteEntry(invalid_dest->dest_ip, invalid_dest->next_hop);
+            invalid_dest->status = ROUTE_INVALID;
+            set_expiration_timer(invalid_dest, DELETE_PERIOD);
+
+            pthread_mutex_unlock(&invalid_dest->entry_mutex);
+        }
+    }
+    // If it does not unicast or broadcast the rerr
+    if(num_dests == 0){
+        return LOGGING;
+    }
+    int packet_length = 0;
+    uint8_t *rerr_buff = generate_rerr_message_buff(&packet_length, 0, num_dests/2, dest_ip_seq_pairs);
+    if(single_rerr != 0 && broadcast_rerr == 0){
+        SendUnicast(single_rerr, rerr_buff, NULL);
+    }  
+    else{
+        SendBroadcast(rerr_buff, NULL);
+    }
+    free(dest_ip_seq_pairs);
+    free(rerr_buff);
+    return LOGGING;
 }

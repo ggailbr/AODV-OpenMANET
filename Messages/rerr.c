@@ -35,3 +35,29 @@ uint8_t *generate_rerr_message(int *packet_length, int n, int number_dests, ...)
     #endif
     return packet;
 }
+uint8_t *generate_rerr_message_buff(int *packet_length, int n, int number_dests, uint32_t * dest_ip_seq_pairs){
+    rerr_header header;
+    if(number_dests <= 0){
+        // Should be >=1 !!!!
+        return NULL;
+    }
+    // Setting Header type and number of destionations
+    // IGNORING N for now
+    header.type = RERR_TYPE;
+    header.n = n;
+    header.reserved = 0;
+    header.dest_count = number_dests;
+
+    uint8_t *packet = (uint8_t *) malloc(sizeof(rerr_header) + sizeof(uint32_t) * number_dests * 2);
+    uint32_t *destination_list = (uint32_t *)(packet + sizeof(rerr_header));
+    memcpy(packet, &header, sizeof(rerr_header));
+    memcpy(destination_list, dest_ip_seq_pairs, sizeof(uint32_t) * 2 * number_dests);
+    *packet_length = sizeof(rerr_header) + sizeof(uint32_t) * number_dests * 2;
+    #ifdef DEBUG
+    debprintf("[PACKET-RERR] : 0x%08x", ((uint32_t *) packet)[0]);
+    for(int i = 0; i < number_dests; i++){
+        debprintf(", 0x%08x, 0x%08x",((uint32_t *) packet)[(2*i)+1], ((uint32_t *) packet)[(2*i)+2]);
+    }
+    #endif
+    return packet;
+}

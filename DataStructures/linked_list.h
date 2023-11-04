@@ -45,4 +45,13 @@ void remove_entry_from_list(linked_list * list, uint32_t data);
  */
 uint32_t * get_all_entries(linked_list * list, uint32_t *size);
 
+/**
+ * @brief Checks if data is in a linked list
+ * 
+ * @param list The list to search for the data
+ * @param data The data to search for
+ * @return 0 if data was not found, 1 if so
+ */
+uint8_t is_in_list(linked_list * list, uint32_t data);
+
 #endif
