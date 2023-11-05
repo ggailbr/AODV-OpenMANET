@@ -14,6 +14,7 @@ uint32_t ip_address = 0xC4A80007;
 safe_32 rreq_id;
 safe_32 sequence_num;
 routing_table routes;
+pthread_t hello_thread;
 volatile uint32_t active_routes = 0;
 /*
  * This is a protocol main function. This is run once at the start 
@@ -25,7 +26,7 @@ uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t
 uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length);
 
 #ifdef HELLO_MESSAGES
-void hello_interval();
+void* hello_interval(void *);
 #endif
 
 int main(int argc, char **argv){
@@ -53,6 +54,7 @@ int main(int argc, char **argv){
         printf("Error Registering Callback\n");
     }
     printf("Test\n");
+    pthread_create(&hello_thread, NULL, hello_interval, NULL);
     // Spin forever
     while(1);
     // If somehow leave, destroy mutex
@@ -221,7 +223,7 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
 }
 
 #ifdef HELLO_MESSAGES
-void hello_interval(){
+void *hello_interval(void * __unused){
     struct timespec current_time;
     uint32_t seq = read_safe(&sequence_num);   
     uint8_t *rrep_buf = generate_rrep_message(0, 0, ip_address, seq, 0x0, ALLOWED_HELLO_LOSS * HELLO_INTERVAL);
