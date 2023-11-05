@@ -94,7 +94,7 @@ int outgoing_message(uint32_t dest_ip, uint8_t *body){
 int forwarded_messages(uint32_t src_ip, uint32_t dest_ip, uint8_t *body){
     routing_entry * destination = get_routing_entry(routes, dest_ip);
     routing_entry * src_entry = get_routing_entry(routes, src_ip);
-    routing_entry * dest_hop, *origin_hop;
+    routing_entry * dest_hop, *origin_hop, *unreachable_dest;
     // If we have a route
     if(destination != NULL){
         pthread_mutex_lock(&destination->entry_mutex);
@@ -113,19 +113,76 @@ int forwarded_messages(uint32_t src_ip, uint32_t dest_ip, uint8_t *body){
                 }
                 pthread_mutex_unlock(&src_entry->entry_mutex);
             }
-            if((dest_hop = get_routing_entry(routes, src_entry->next_hop)) != NULL){
-                pthread_mutex_lock(&dest_hop->entry_mutex);
-                set_expiration_timer(dest_hop, ACTIVE_ROUTE_TIMEOUT);
-                pthread_mutex_unlock(&dest_hop->entry_mutex);
-            }
             set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
         }
         // RERR condition 1
         // I.E Link break in next hop of active route
-        else if(destination->status = ROUTE_VALID){
+        else if(destination->status = ROUTE_VALID && dest_hop != NULL){
             // [TODO] Attempt Link Repair
+            // If link repair fails
+            uint32_t size = 0, num_dests = 0;
+            uint32_t single_rerr = 0;
+            uint8_t broadcast_rerr = 0;
+            pthread_mutex_lock(&dest_hop->entry_mutex);
+            uint32_t * destination_list = get_all_entries(dest_hop->next_hop_for, &size);
+            uint32_t *dest_ip_seq_list = (uint32_t *) malloc(sizeof(uint32_t) * 2 * (size + 1));
+            dest_ip_seq_list[0] = dest_hop->dest_ip;
+            if(dest_hop->seq_valid == SEQ_INVALID){
+                debprintf("[RERR] Generated without valid sequence");
+            }
+            dest_ip_seq_list[1] = dest_hop->dest_seq;
+            num_dests += 1;
+            set_expiration_timer(dest_hop, DELETE_PERIOD);
+            pthread_mutex_unlock(&dest_hop->entry_mutex);
+            for(int i = 0; i < size; i++){
+                unreachable_dest = get_routing_entry(routes, destination_list[i]);
+                if(unreachable_dest != NULL){
+                    pthread_mutex_lock(&unreachable_dest->entry_mutex);
+                    /*
+                    The RERR should contain those destinations that are part of
+                    the created list of unreachable destinations and have a non-empty
+                    precursor list.
+                    */
+                    if(unreachable_dest->precursor_list->first != NULL){
+                        if(unreachable_dest->precursor_list->first == unreachable_dest->precursor_list->last && single_rerr == 0){
+                            single_rerr = unreachable_dest->precursor_list->first->data;
+                        }
+                        else{
+                            broadcast_rerr = 1;
+                        }
+                        num_dests++;
+                        dest_ip_seq_list[((num_dests)*2)] = unreachable_dest->dest_ip;
+                        dest_ip_seq_list[((num_dests)*2) + 1] = unreachable_dest->dest_seq + 1;
+                    }
+                    /*
+                    1. The destination sequence number of this routing entry, if it
+                        exists and is valid, is incremented for cases (i) and (ii) above,
+                        and copied from the incoming RERR in case (iii) above.
+
+                    2. The entry is invalidated by marking the route entry as invalid
+
+                    3. The Lifetime field is updated to current time plus DELETE_PERIOD.
+                        Before this time, the entry SHOULD NOT be deleted.
+                    */
+                    unreachable_dest->dest_seq += 1;
+                    DeleteEntry(unreachable_dest->dest_ip, unreachable_dest->next_hop);
+                    unreachable_dest->status = ROUTE_INVALID;
+                    set_expiration_timer(unreachable_dest, DELETE_PERIOD);
+
+                    pthread_mutex_unlock(&unreachable_dest->entry_mutex);
+                }
+            }
+            // Should have a buffer of pairs that is 2*num_dests long
             
-            continue;
+            uint8_t * rerr_buff = generate_rerr_message_buff(&size, 0, num_dests, dest_ip_seq_list);
+            if(single_rerr != 0 && broadcast_rerr == 0){
+                SendUnicast(single_rerr, rerr_buff, NULL);
+            }  
+            else{
+                SendBroadcast(rerr_buff, NULL);
+            }
+            free(dest_ip_seq_list);
+            free(rerr_buff);
         }
         // RERR Condition 2
         // Destined for node which it does not have an active route for
