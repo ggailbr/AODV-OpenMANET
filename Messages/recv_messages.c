@@ -155,7 +155,7 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
     // Or if the unknown flag is set
     if(destination != NULL && destination->seq_valid == SEQ_VALID && ((rreq_message->flags & RREQ_UNKNOWN) != 0 || seq_compare(rreq_message->dest_seq, destination->dest_seq) < 0))
         rreq_message->dest_seq = destination->dest_seq;
-    SendBroadcast((uint8_t *)rreq_message, NULL);
+    SendBroadcast((uint8_t *)rreq_message, sizeof(rreq_header), NULL);
     return LOGGING;
 }
 
@@ -284,7 +284,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
             pthread_mutex_lock(&originator->entry_mutex);
             add_entry_to_list(originator->precursor_list, destination->next_hop);
             add_entry_to_list(destination->precursor_list, originator->next_hop);
-            SendUnicast(originator->next_hop, (uint8_t *) rrep_message, NULL);
+            SendUnicast(originator->next_hop, (uint8_t *) rrep_message, sizeof(rrep_header),NULL);
             pthread_mutex_unlock(&originator->entry_mutex);
         }
     }
@@ -359,10 +359,10 @@ uint8_t recv_rerr(uint32_t sender_ip, uint8_t * rerr_message){
     uint32_t packet_length = 0;
     uint8_t *rerr_buff = generate_rerr_message_buff(&packet_length, 0, num_dests/2, dest_ip_seq_pairs);
     if(single_rerr != 0 && broadcast_rerr == 0){
-        SendUnicast(single_rerr, rerr_buff, NULL);
+        SendUnicast(single_rerr, rerr_buff, sizeof(rerr_header) + sizeof(uint32_t) * num_dests, NULL);
     }  
     else{
-        SendBroadcast(rerr_buff, NULL);
+        SendBroadcast(rerr_buff, sizeof(rerr_header) + sizeof(uint32_t) * num_dests, NULL);
     }
     free(dest_ip_seq_pairs);
     free(rerr_buff);

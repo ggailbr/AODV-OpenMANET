@@ -72,7 +72,8 @@ void add_time(struct timespec *current_time, struct timespec *end_time){
  */
 void add_time_ms(struct timespec *current_time, uint32_t miliseconds){
     // current_time = End Time-CurrentTime
-    current_time->tv_nsec = miliseconds*1000000 + current_time->tv_nsec;
+    current_time->tv_sec += miliseconds/1000;
+    current_time->tv_nsec = (miliseconds - 1000*(miliseconds/1000))*1000000 + current_time->tv_nsec;
     while(current_time->tv_nsec > 1000000000){
         current_time->tv_nsec -= 1000000000;
         current_time->tv_sec++;
@@ -86,8 +87,10 @@ void add_time_ms(struct timespec *current_time, uint32_t miliseconds){
  * @param miliseconds The time in MS to store in the current_time
  */
 void convert_ms_to_timespec(struct timespec *current_time, uint32_t miliseconds){
-    current_time->tv_sec = 0;
-    current_time->tv_nsec = miliseconds*1000000;
+    //debprintf("Convering %d to timestruct\n", miliseconds);
+    current_time->tv_sec = miliseconds/1000;
+    current_time->tv_nsec = (miliseconds - current_time->tv_sec*1000)*1000000;
+    //debprintf("Timespec: {\n\t %ldsec \n\t%ld ns\n", current_time->tv_sec,  current_time->tv_nsec );
     while(current_time->tv_nsec > 1000000000){
         current_time->tv_nsec -= 1000000000;
         current_time->tv_sec++;

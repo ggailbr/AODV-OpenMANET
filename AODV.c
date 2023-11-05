@@ -11,6 +11,7 @@
 
 // [CHANGE] Manually setting for now, should be changed to the dynamic interface IP
 uint32_t ip_address = 0xC4A80007;
+uint32_t broadcast_ip = 0;
 safe_32 rreq_id;
 safe_32 sequence_num;
 routing_table routes;
@@ -43,14 +44,16 @@ int main(int argc, char **argv){
     // Set interface
     //SetInterface((uint8_t *)"wlan0");
     ip_address = GetInterfaceIP((uint8_t *)"wlan0", 0);
+    broadcast_ip = GetInterfaceIP((uint8_t *)"wlan0", 1);
     // Register our functions
-    if(RegisterIncomingCallback(incoming_message) != 0){
+    printf("Outgoing pointer %p\n", &outgoing_message);
+    if(RegisterIncomingCallback(&incoming_message) != 0){
         printf("Error Registering Callback\n");
     }
-    if(RegisterOutgoingCallback(outgoing_message) != 0){
+    if(RegisterOutgoingCallback(&outgoing_message) != 0){
         printf("Error Registering Callback\n");
     }
-    if(RegisterForwardCallback(forwarded_messages) != 0){
+    if(RegisterForwardCallback(&forwarded_messages) != 0){
         printf("Error Registering Callback\n");
     }
     printf("Test\n");
@@ -67,7 +70,11 @@ int main(int argc, char **argv){
  * This function is called each time a message is received
 */
 uint8_t incoming_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
-    packet_type type = payload[0];
+    debprintf("Incoming Message\n");    
+    packet_type type = payload[3];
+    if(src == ip_address){
+        return PACKET_DROP;
+    }
     switch(type){
         case(RREQ_TYPE):
             return recv_rreq(src, (rreq_header *) payload);
@@ -83,15 +90,21 @@ uint8_t incoming_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t
             // Mark Route as Bidirectional
             break;
         default:
-            debprintf("[ERROR] : Unknown Packet Type");
+            debprintf("[ERROR] : Unknown Packet Type\n");
     }
     return 0;
 }
 
 uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
+    debprintf("Outgoing Message\n");
+    if(dest == broadcast_ip){
+        debprintf("Intercepted Broadcast\n");
+        return PACKET_ACCEPT;
+    }
     // Check if we have a route already
     routing_entry * destination = get_routing_entry(routes, dest);
     if(destination != NULL && destination->status == ROUTE_VALID){
+        debprintf("Already has a route\n");
         pthread_mutex_lock(&destination->entry_mutex);
         set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
         pthread_mutex_unlock(&destination->entry_mutex);
@@ -99,11 +112,13 @@ uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t
         return 1;
     }
     // Search for a route
+    debprintf("Does Not Have a Route\n");
     return send_rreq(dest);
 }
 
 // Here will be the logic for accepting and resetting timers for forwarded packets
 uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
+    debprintf("Forwarded Message");
     routing_entry * destination = get_routing_entry(routes, dest);
     routing_entry * src_entry = get_routing_entry(routes, src);
     routing_entry * dest_hop, *origin_hop, *unreachable_dest;
@@ -193,10 +208,10 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
             
             uint8_t * rerr_buff = generate_rerr_message_buff(&size, 0, num_dests, dest_ip_seq_list);
             if(single_rerr != 0 && broadcast_rerr == 0){
-                SendUnicast(single_rerr, rerr_buff, NULL);
+                SendUnicast(single_rerr, rerr_buff, sizeof(rerr_header) + 2 * sizeof(uint32_t) * num_dests, NULL);
             }  
             else{
-                SendBroadcast(rerr_buff, NULL);
+                SendBroadcast(rerr_buff, sizeof(rerr_header) + 2 * sizeof(uint32_t) * num_dests, NULL);
             }
             free(destination_list);
             free(dest_ip_seq_list);
@@ -217,7 +232,7 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
         rerr_buff = generate_rerr_message(&size, 0, 1, dest, destination->dest_ip);
         pthread_mutex_unlock(&destination->entry_mutex);
     }
-    SendBroadcast(rerr_buff, NULL);
+    SendBroadcast(rerr_buff, sizeof(rerr_header) + 2 * sizeof(uint32_t), NULL);
     free(rerr_buff);
     return PACKET_DROP;
 }
@@ -225,7 +240,7 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
 #ifdef HELLO_MESSAGES
 void *hello_interval(void * __unused){
     struct timespec current_time;
-    uint32_t seq = read_safe(&sequence_num);   
+    uint32_t seq = read_safe(&sequence_num);
     uint8_t *rrep_buf = generate_rrep_message(0, 0, ip_address, seq, 0x0, ALLOWED_HELLO_LOSS * HELLO_INTERVAL);
     rrep_header * rrep_message = (rrep_header *)rrep_buf;
     while(1){
@@ -235,7 +250,7 @@ void *hello_interval(void * __unused){
         seq = read_safe(&sequence_num);   
         rrep_message->dest_seq = seq;
         // Send it back along sender's path
-        SendBroadcast(rrep_buf, NULL);
+        SendBroadcast(rrep_buf, sizeof(rrep_header), NULL);
     }
     // Free the message buffer made
     free(rrep_buf);

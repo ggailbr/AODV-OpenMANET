@@ -48,7 +48,7 @@ void send_rrep_destination(rreq_header *message, uint32_t sender_ip){
     // Copying information and sending
     uint8_t *rrep_buf = generate_rrep_message(0, 0, ip_address, seq, message->src_ip, MY_ROUTE_TIMEOUT);
     // Send it back along sender's path
-    SendUnicast(sender_ip, rrep_buf, NULL);
+    SendUnicast(sender_ip, rrep_buf, sizeof(rrep_header), NULL);
     // Free the message buffer made
     free(rrep_buf);
 }
@@ -79,7 +79,7 @@ void send_rrep_intermediate(rreq_header *message, uint32_t sender){
     // Moving the Hop Count
     ((rrep_header *) rrep_buf)->hop_count =  dest_entry->hop_count;
     // Sending RREP to Sender
-    SendUnicast(sender, rrep_buf, NULL);
+    SendUnicast(sender, rrep_buf, sizeof(rreq_header), NULL);
     free(rrep_buf);
 
     // Add next hop to precursor of reverse route
@@ -94,7 +94,7 @@ void send_rrep_intermediate(rreq_header *message, uint32_t sender){
         uint8_t *rrep_buf = generate_rrep_message(0, 0, message->src_ip, message->src_seq, message->dest_ip, ACTIVE_ROUTE_TIMEOUT);
         // Change the hop count
         ((rrep_header *) rrep_buf)->hop_count = message->hop_count;
-        SendUnicast(dest_entry->next_hop, rrep_buf, NULL);
+        SendUnicast(dest_entry->next_hop, rrep_buf, sizeof(rreq_header), NULL);
         free(rrep_buf);
     }
 }
@@ -109,25 +109,36 @@ void send_rrep_intermediate(rreq_header *message, uint32_t sender){
 uint8_t send_rreq(uint32_t dest_addr){
     uint8_t new;
     rreq_status outcome = SEARCH_NONE;
+    debprintf("Getting destination entry\n");
     routing_entry * dest_entry = create_or_get_routing_entry(routes, dest_addr, 0, SEQ_INVALID, 0, 0, MY_ROUTE_TIMEOUT, &new);
-    // Not starting expiration function
-    if(new == 0){
+    // If we recently failed, drop the packet
+    if(dest_entry->rreq_search == SEARCH_FAILED && dest_entry->status == ROUTE_INVALID){
+        return PACKET_DROP;
+    }
+    // Make sure not already searching and it not a new thread
+    if(new == 0 && dest_entry->rreq_search != SEARCH_SEARCHING){
+        debprintf("Was not Searching for a route, but entry exists\n");
         if(!(dest_entry->expiration_thread == 0)){
             pthread_cancel(dest_entry->expiration_thread);
         }
         dest_entry->expiration_thread = 0;
     }
-
-    // Locking entry and starting rreq thread
-    pthread_mutex_lock(&dest_entry->entry_mutex);
-    // Start the search
-    pthread_create(&dest_entry->rreq_message_sender, NULL, send_rreq_thread, (void *) dest_entry);
-    // Set the status to searching
-    dest_entry->rreq_search = SEARCH_SEARCHING;
-    pthread_mutex_unlock(&dest_entry->entry_mutex);
-
+    // Make sure we are not searching for route already
+    if(dest_entry->rreq_search != SEARCH_SEARCHING){
+        
+        debprintf("Creating a Route Request Thread\n");
+        // Locking entry and starting rreq thread
+        pthread_mutex_lock(&dest_entry->entry_mutex);
+        // Start the search
+        pthread_create(&dest_entry->rreq_message_sender, NULL, send_rreq_thread, (void *) dest_entry);
+        // Set the status to searching
+        dest_entry->rreq_search = SEARCH_SEARCHING;
+        pthread_mutex_unlock(&dest_entry->entry_mutex);
+    }
     // Wait until we are no longer searching
     // [TODO] Could be better
+    
+    debprintf("Waiting until the searching status changes\n");
     while(dest_entry->rreq_search == SEARCH_SEARCHING){
         sched_yield();
     }
@@ -138,11 +149,17 @@ uint8_t send_rreq(uint32_t dest_addr){
 
     // If it was a failure
     if(outcome == SEARCH_FAILED){
+        debprintf("Search Failed, dropping packet\n");
+        pthread_mutex_lock(&dest_entry->entry_mutex);
+        set_expiration_timer(dest_entry, 1000);
+        pthread_mutex_unlock(&dest_entry->entry_mutex);
         // Drop Packet
         return PACKET_DROP;
     }
     else{
         // Accept Packets
+        debprintf("Search Succeded, sending packet\n");
+        dest_entry->rreq_search = SEARCH_NONE;
         return PACKET_ACCEPT;
     }
 
@@ -193,18 +210,25 @@ void *send_rreq_thread(void *thread_entry){
         // Incrementing id
         rreq_message->rreq_id = increment_safe(&rreq_id);
         rreq_message->ttl = ttl;
-        SendBroadcast(rreq_buff, NULL);
+        SendBroadcast(rreq_buff, sizeof(rreq_header), NULL);
+        debprintf("Sending RREQ %d\n", ttl);
         convert_ms_to_timespec(&wait_time, RING_TRAVERSAL_TIME(ttl));
+        debprintf("Waiting: %dms\n", convert_timespec_to_ms(&wait_time));
+        while(nanosleep(&wait_time, &wait_time));
     }
     ttl = NET_DIAMETER;
     uint32_t fall_off = 1;
     for(uint32_t i = 0; i <= RREQ_RETRIES; i++){
         rreq_message->rreq_id = increment_safe(&rreq_id);
         rreq_message->ttl = ttl;
-        SendBroadcast(rreq_buff, NULL);
+        SendBroadcast(rreq_buff, sizeof(rreq_header), NULL);
+        debprintf("Sending RREQ Max\n");
         convert_ms_to_timespec(&wait_time, NET_TRAVERSAL_TIME * (fall_off << i));
+        debprintf("Waiting: %dms\n", convert_timespec_to_ms(&wait_time));
+        while(nanosleep(&wait_time, &wait_time));
     }
     // Start expiration thread on failure
+    debprintf("Sending RREQ FAILED\n");
     pthread_mutex_lock(&dest_entry->entry_mutex);
     dest_entry->rreq_message_sender = 0;
     dest_entry->rreq_search = SEARCH_FAILED;

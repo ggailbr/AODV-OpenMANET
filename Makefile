@@ -14,8 +14,11 @@ TEST_PATH = DataStructure/data_structure
 AODV.out: AODV.c $(SOURCES)
 	$(CC) $(CFLAGS) $^ -o ./Build/$@ -ltestbed $(LIBPATH) -pthread -lnetfilter_queue
 
+testbed:
+	cd MANET-Testbed; git pull origin main; make
+
 run: AODV.out
-	sudo LD_LIBRARY_PATH=$(PWD)/MANET-Testbed:$LD_LIBRARY_PATH ./Build/AODV.out
+	sudo LD_LIBRARY_PATH=./MANET-Testbed:$LD_LIBRARY_PATH ./Build/AODV.out
 
 clean:
 	rm -rf Build/*

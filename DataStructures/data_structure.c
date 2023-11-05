@@ -25,20 +25,20 @@
 uint8_t add_entry_to_data_structure(data_header container, entry entry, uint32_t sort_variable){
     // Since it is just an array, add it based on the last couple bytes of uint32_t
     uint8_t index = sort_variable >> 24;
-    debprintf("For %08x : Index Found to be %08x\n", sort_variable, index);
+    //debprintf("For %08x : Index Found to be %08x\n", sort_variable, index);
     container[index] = entry;
     return index;
 }
 entry remove_entry_from_data_structure(data_header container, uint32_t search_variable){
     uint8_t index = search_variable >> 24;
-    debprintf("For %08x : Index Found to be %08x\n", search_variable, index);
+    //debprintf("For %08x : Index Found to be %08x\n", search_variable, index);
     entry return_val = container[index];
     container[index] = NULL;
     return return_val;
 }
 entry find_entry_in_data_structure(data_header container, uint32_t search_variable){
     uint8_t index = search_variable >> 24;
-    debprintf("For %08x : Index Found to be %08x\n", search_variable, index);
+    //debprintf("For %08x : Index Found to be %08x\n", search_variable, index);
     return container[index];
 }
 data_header create_data_header(){
