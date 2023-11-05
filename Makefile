@@ -15,4 +15,4 @@ AODV.out: AODV.c $(SOURCES)
 	$(CC) $(CFLAGS) $^ -o ./Build/$@ -ltestbed $(LIBPATH) -pthread -lnetfilter_queue
 
 clean:
-	rm -rf Build/
+	rm -rf Build/*

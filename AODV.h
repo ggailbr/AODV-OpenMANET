@@ -1,14 +1,10 @@
-#ifndef AODV_H
-#define AODV_H
+#ifndef __AODV_H__
+#define __AODV_H__
 
-#include "safe.h"
-#include "debug.h"
+#include <stdint.h>
 #include "routing_table.h"
-#include "rerr.h"
-#include "rreq.h"
-#include "rrep.h"
+#include "safe.h"
 #include "manet_testbed.h"
-#include "send_messages.h"
 
 
 #define LOGGING PACKET_DROP

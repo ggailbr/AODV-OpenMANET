@@ -1,5 +1,5 @@
-#ifndef RREQ_H
-#define RREQ_H
+#ifndef __RREQ_H__
+#define __RREQ_H__
 
 #include <stdint.h>
 #include <stdarg.h>
@@ -71,7 +71,7 @@ typedef struct rreq_header_t{
     #else
     # error "No Endianness detected"
     #endif
-} rreq_header;
+}rreq_header;
 /**
  * @brief Generates a fresh RREQ Message. This should only be done by the originator
  *  The RREQ ID MUST be incremented prior to calling this function

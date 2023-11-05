@@ -1,5 +1,5 @@
-#ifndef RERR_H
-#define RERR_H
+#ifndef __RERR_H__
+#define __RERR_H__
 
 #include <stdint.h>
 #include <stdarg.h>

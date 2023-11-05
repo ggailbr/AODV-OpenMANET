@@ -1,5 +1,5 @@
-#ifndef RREP_H
-#define RREP_H
+#ifndef __RREP_H__
+#define __RREP_H__
 
 #include <stdint.h>
 #include <stdarg.h>

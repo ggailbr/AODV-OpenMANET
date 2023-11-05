@@ -2,6 +2,8 @@
 #include "time_funcs.h"
 #include "recv_messages.h"
 #include "rreq.h"
+#include "rrep.h"
+#include "send_messages.h"
 
 
 

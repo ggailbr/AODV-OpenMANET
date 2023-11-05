@@ -40,7 +40,7 @@ int main(int argc, char **argv){
     // Start the API
     InitializeAPI();
     // Set interface
-    SetInterface((uint8_t *)"wlan0");
+    //SetInterface((uint8_t *)"wlan0");
     ip_address = GetInterfaceIP((uint8_t *)"wlan0", 0);
     // Register our functions
     if(RegisterIncomingCallback(incoming_message) != 0){

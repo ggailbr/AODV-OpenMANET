@@ -1,8 +1,13 @@
+
+#include <stdint.h>
+#include <pthread.h>
+#include <sched.h>
+#include "AODV.h"
+#include "rreq.h"
 #include "send_messages.h"
 #include "time_funcs.h"
 #include "manet_testbed.h"
-#include <pthread.h>
-#include <sched.h>
+#include "rrep.h"
 
 
 void *send_rreq_thread(void *thread_entry);
@@ -207,5 +212,6 @@ void *send_rreq_thread(void *thread_entry){
     pthread_mutex_unlock(&dest_entry->entry_mutex);
 
     // exiting to call cleanup functions
+    pthread_cleanup_pop(1);
     pthread_exit(NULL);
 }
