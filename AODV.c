@@ -46,7 +46,6 @@ int main(int argc, char **argv){
     ip_address = GetInterfaceIP((uint8_t *)"wlan0", 0);
     broadcast_ip = GetInterfaceIP((uint8_t *)"wlan0", 1);
     // Register our functions
-    printf("Outgoing pointer %p\n", &outgoing_message);
     if(RegisterIncomingCallback(&incoming_message) != 0){
         printf("Error Registering Callback\n");
     }
@@ -72,17 +71,26 @@ int main(int argc, char **argv){
 uint8_t incoming_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
     debprintf("Incoming Message\n");    
     packet_type type = payload[3];
+
+    for(uint32_t i = 0; i < payload_length; i++){
+        debprintf("%02x", payload[i]);
+    }
+    debprintf("\n");
+    
     if(src == ip_address){
         return PACKET_DROP;
     }
     switch(type){
         case(RREQ_TYPE):
+            debprintf("Received RREQ\n");
             return recv_rreq(src, (rreq_header *) payload);
             break;
         case(RREP_TYPE):
+            debprintf("Received RREP\n");
             return recv_rrep(src, (rrep_header *) payload);
             break;
         case(RERR_TYPE):
+            debprintf("Received RERR\n");
             return recv_rerr(src, payload);
             break;
         case(RREP_ACK_TYPE):
