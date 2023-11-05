@@ -51,7 +51,7 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
     }
 
     // Increment the hop count
-    increment_hop_rreq(rreq_message);
+    increment_hop_rreq((uint8_t *)rreq_message);
 
     // Search for the Reverse Route
     originator = create_or_get_routing_entry(routes, rreq_message->src_ip, rreq_message->src_seq, SEQ_VALID, sender_ip, rreq_message->hop_count, 0, &new);
@@ -133,7 +133,7 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
              using signed 32-bit arithmetic), and the "destination only"
              ('D') flag is NOT set.
         */ 
-        if(destination != NULL && destination->status == ROUTE_VALID && destination->seq_valid == SEQ_VALID && (rreq_message->flags & RREQ_UNKNOWN != 0 || seq_compare(rreq_message->dest_seq, destination->dest_seq) < 0)){
+        if(destination != NULL && destination->status == ROUTE_VALID && destination->seq_valid == SEQ_VALID && ((rreq_message->flags & RREQ_UNKNOWN) != 0 || seq_compare(rreq_message->dest_seq, destination->dest_seq) < 0)){
             send_rrep_intermediate(rreq_message, sender_ip);
             return LOGGING;
         }
@@ -151,9 +151,9 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
 
     // If we have a fresher destination sequence number
     // Or if the unknown flag is set
-    if(destination != NULL && destination->seq_valid == SEQ_VALID && (rreq_message->flags & RREQ_UNKNOWN != 0 || seq_compare(rreq_message->dest_seq, destination->dest_seq) < 0))
+    if(destination != NULL && destination->seq_valid == SEQ_VALID && ((rreq_message->flags & RREQ_UNKNOWN) != 0 || seq_compare(rreq_message->dest_seq, destination->dest_seq) < 0))
         rreq_message->dest_seq = destination->dest_seq;
-    SendBroadcast(rreq_message, NULL);
+    SendBroadcast((uint8_t *)rreq_message, NULL);
     return LOGGING;
 }
 
@@ -166,7 +166,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
         // Signal a route has been found
         destination->rreq_search = SEARCH_FOUND;
         pthread_cancel(destination->rreq_message_sender);
-        destination->rreq_message_sender = NULL;
+        destination->rreq_message_sender = 0;
         pthread_mutex_unlock(&destination->entry_mutex);
     }
 
@@ -198,7 +198,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
     }
 
     // Increment hop in rrep
-    increment_hop_rrep(rrep_message);
+    increment_hop_rrep((uint8_t *) rrep_message);
 
     //Create forward route
     destination = create_or_get_routing_entry(routes, rrep_message->dest_ip, rrep_message->dest_seq, SEQ_VALID, sender_ip, rrep_message->hop_count, rrep_message->lifetime, &new);
@@ -262,7 +262,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
     if(rrep_message->src_ip == 0x0){
         pthread_mutex_unlock(&destination->entry_mutex);
         // If we require an ack
-        if(rrep_message->flags & RREP_ACK != 0){
+        if((rrep_message->flags & RREP_ACK) != 0){
             //[TODO]
             return LOGGING;
         }
@@ -276,19 +276,19 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
     if(ip_address != rrep_message->src_ip){
         routing_entry * originator = get_routing_entry(routes, rrep_message->src_ip);
         if(originator == NULL){
-            debprintf("ERROR [RREP]Unknown Origin on RREP\n")
+            debprintf("ERROR [RREP]Unknown Origin on RREP\n");
         }
         else{
             pthread_mutex_lock(&originator->entry_mutex);
-            add_entry_to_list(&originator->precursor_list, destination->next_hop);
-            add_entry_to_list(&destination->precursor_list, originator->next_hop);
-            SendUnicast(originator->next_hop, rrep_message, NULL);
+            add_entry_to_list(originator->precursor_list, destination->next_hop);
+            add_entry_to_list(destination->precursor_list, originator->next_hop);
+            SendUnicast(originator->next_hop, (uint8_t *) rrep_message, NULL);
             pthread_mutex_unlock(&originator->entry_mutex);
         }
     }
     pthread_mutex_unlock(&destination->entry_mutex);
     // If we need to acknowledge
-    if(rrep_message->flags & RREP_ACK != 0){
+    if((rrep_message->flags & RREP_ACK) != 0){
         //[TODO]
         return LOGGING;
     }
@@ -299,7 +299,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
 uint8_t recv_rerr(uint32_t sender_ip, uint8_t * rerr_message){
     // Seperating out the header and the pairs
     rerr_header * rerr_message_header = (rerr_header *) rerr_message;
-    uint32_t *dest_pairs = &rerr_message[sizeof(rerr_header)];
+    uint32_t *dest_pairs = (uint32_t *) (&rerr_message[sizeof(rerr_header)]);
 
     /*
         destinations in the RERR
@@ -343,6 +343,9 @@ uint8_t recv_rerr(uint32_t sender_ip, uint8_t * rerr_message){
             DeleteEntry(invalid_dest->dest_ip, invalid_dest->next_hop);
             invalid_dest->status = ROUTE_INVALID;
             set_expiration_timer(invalid_dest, DELETE_PERIOD);
+            if(active_routes > 0){
+                active_routes--;
+            }
 
             pthread_mutex_unlock(&invalid_dest->entry_mutex);
         }
@@ -351,7 +354,7 @@ uint8_t recv_rerr(uint32_t sender_ip, uint8_t * rerr_message){
     if(num_dests == 0){
         return LOGGING;
     }
-    int packet_length = 0;
+    uint32_t packet_length = 0;
     uint8_t *rerr_buff = generate_rerr_message_buff(&packet_length, 0, num_dests/2, dest_ip_seq_pairs);
     if(single_rerr != 0 && broadcast_rerr == 0){
         SendUnicast(single_rerr, rerr_buff, NULL);

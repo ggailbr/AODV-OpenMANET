@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include "AODV.h"
 #include "recv_messages.h"
+#include "send_messages.h"
 #include "rrep.h"
 #include "routing_table.h"
 #include <time.h>
@@ -19,9 +20,9 @@ volatile uint32_t active_routes = 0;
  * of route creation. 
 */
 
-/*
-Protocol Prototypes representing undelying functions not yet implemented
-*/
+uint8_t incoming_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length);
+uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length);
+uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length);
 
 #ifdef HELLO_MESSAGES
 void hello_interval();
@@ -39,9 +40,18 @@ int main(int argc, char **argv){
     // Start the API
     InitializeAPI();
     // Set interface
-    SetInterface("wlan0");
-    ip_address = GetInterfaceIP("wlan0", 0);
+    SetInterface((uint8_t *)"wlan0");
+    ip_address = GetInterfaceIP((uint8_t *)"wlan0", 0);
     // Register our functions
+    if(RegisterIncomingCallback(incoming_message) != 0){
+        printf("Error Registering Callback\n");
+    }
+    if(RegisterOutgoingCallback(outgoing_message) != 0){
+        printf("Error Registering Callback\n");
+    }
+    if(RegisterForwardCallback(forwarded_messages) != 0){
+        printf("Error Registering Callback\n");
+    }
     printf("Test\n");
     // Spin forever
     while(1);
@@ -54,17 +64,17 @@ int main(int argc, char **argv){
 /* 
  * This function is called each time a message is received
 */
-int incoming_message(uint32_t sender_ip, uint8_t *body){
-    packet_type type = body[0];
+uint8_t incoming_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
+    packet_type type = payload[0];
     switch(type){
         case(RREQ_TYPE):
-            return recv_rreq(sender_ip, (rreq_header *) body);
+            return recv_rreq(src, (rreq_header *) payload);
             break;
         case(RREP_TYPE):
-            return recv_rrep(sender_ip, (rrep_header *) body);
+            return recv_rrep(src, (rrep_header *) payload);
             break;
         case(RERR_TYPE):
-            return recv_rerr(sender_ip, body);
+            return recv_rerr(src, payload);
             break;
         case(RREP_ACK_TYPE):
             // UNIMPLEMENTED
@@ -76,9 +86,9 @@ int incoming_message(uint32_t sender_ip, uint8_t *body){
     return 0;
 }
 
-int outgoing_message(uint32_t dest_ip, uint8_t *body){
+uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
     // Check if we have a route already
-    routing_entry * destination = get_routing_entry(routes, dest_ip);
+    routing_entry * destination = get_routing_entry(routes, dest);
     if(destination != NULL && destination->status == ROUTE_VALID){
         pthread_mutex_lock(&destination->entry_mutex);
         set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
@@ -87,20 +97,20 @@ int outgoing_message(uint32_t dest_ip, uint8_t *body){
         return 1;
     }
     // Search for a route
-    return send_rreq(dest_ip);
+    return send_rreq(dest);
 }
 
 // Here will be the logic for accepting and resetting timers for forwarded packets
-int forwarded_messages(uint32_t src_ip, uint32_t dest_ip, uint8_t *body){
-    routing_entry * destination = get_routing_entry(routes, dest_ip);
-    routing_entry * src_entry = get_routing_entry(routes, src_ip);
+uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
+    routing_entry * destination = get_routing_entry(routes, dest);
+    routing_entry * src_entry = get_routing_entry(routes, src);
     routing_entry * dest_hop, *origin_hop, *unreachable_dest;
     // If we have a route
     if(destination != NULL){
         pthread_mutex_lock(&destination->entry_mutex);
         dest_hop = get_routing_entry(routes, destination->next_hop);
         // And the route is valid and thenext hop is valid
-        if(destination->status = ROUTE_VALID && dest_hop != NULL && dest_hop->status == ROUTE_VALID){
+        if(destination->status == ROUTE_VALID && dest_hop != NULL && dest_hop->status == ROUTE_VALID){
             // Updating all of the timers
             set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
             if(src_entry != NULL){
@@ -114,10 +124,12 @@ int forwarded_messages(uint32_t src_ip, uint32_t dest_ip, uint8_t *body){
                 pthread_mutex_unlock(&src_entry->entry_mutex);
             }
             set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
+            pthread_mutex_unlock(&destination->entry_mutex);
+            return PACKET_ACCEPT;
         }
         // RERR condition 1
         // I.E Link break in next hop of active route
-        else if(destination->status = ROUTE_VALID && dest_hop != NULL){
+        else if(destination->status == ROUTE_VALID && dest_hop != NULL){
             // [TODO] Attempt Link Repair
             // If link repair fails
             uint32_t size = 0, num_dests = 0;
@@ -153,6 +165,9 @@ int forwarded_messages(uint32_t src_ip, uint32_t dest_ip, uint8_t *body){
                         num_dests++;
                         dest_ip_seq_list[((num_dests)*2)] = unreachable_dest->dest_ip;
                         dest_ip_seq_list[((num_dests)*2) + 1] = unreachable_dest->dest_seq + 1;
+                        if(active_routes > 0){
+                            active_routes--;
+                        }
                     }
                     /*
                     1. The destination sequence number of this routing entry, if it
@@ -181,22 +196,28 @@ int forwarded_messages(uint32_t src_ip, uint32_t dest_ip, uint8_t *body){
             else{
                 SendBroadcast(rerr_buff, NULL);
             }
+            free(destination_list);
             free(dest_ip_seq_list);
             free(rerr_buff);
+            pthread_mutex_unlock(&destination->entry_mutex);
+            return PACKET_DROP;
         }
-        // RERR Condition 2
-        // Destined for node which it does not have an active route for
-        else{
-
-        }
-        pthread_mutex_unlock(&destination->entry_mutex);
     }
     // RERR Condition 2
     // Destined for node which it does not have an active route for
-    else{
-
+    uint8_t * rerr_buff;
+    uint32_t size = 0;
+    if(destination == NULL){
+        debprintf("[RERR] No Destination Entry");
+        rerr_buff = generate_rerr_message(&size, 0, 1, dest, 0);
     }
-    return 0;
+    else{
+        rerr_buff = generate_rerr_message(&size, 0, 1, dest, destination->dest_ip);
+        pthread_mutex_unlock(&destination->entry_mutex);
+    }
+    SendBroadcast(rerr_buff, NULL);
+    free(rerr_buff);
+    return PACKET_DROP;
 }
 
 #ifdef HELLO_MESSAGES

@@ -139,7 +139,7 @@ void set_expiration_timer(routing_entry * entry, uint32_t ms){
     // Lock the entry
     // pthread_mutex_lock(&entry->entry_mutex);
     // Stop Any Old Timer
-    if(!(entry->expiration_thread == NULL)){
+    if(!(entry->expiration_thread == 0)){
         pthread_cancel(entry->expiration_thread);
     }
     // Check if the user provided a time
@@ -160,7 +160,7 @@ void start_rreq_timer(routing_entry * entry){
     // Lock the entry
     // pthread_mutex_lock(&entry->entry_mutex);
     // Stop Any Old Timer
-    if(!(entry->expiration_thread == NULL)){
+    if(!(entry->expiration_thread == 0)){
         pthread_cancel(entry->expiration_thread);
     }
     // Start the new thread

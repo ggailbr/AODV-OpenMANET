@@ -1,7 +1,7 @@
 #include "rerr.h"
 #include "debug.h"
 
-uint8_t *generate_rerr_message(int *packet_length, int n, int number_dests, ...){
+uint8_t *generate_rerr_message(uint32_t *packet_length, uint8_t n, uint8_t number_dests, ...){
     rerr_header header;
     if(number_dests <= 0){
         // Should be >=1 !!!!
@@ -35,7 +35,7 @@ uint8_t *generate_rerr_message(int *packet_length, int n, int number_dests, ...)
     #endif
     return packet;
 }
-uint8_t *generate_rerr_message_buff(int *packet_length, int n, int number_dests, uint32_t * dest_ip_seq_pairs){
+uint8_t *generate_rerr_message_buff(uint32_t *packet_length, uint8_t n, uint8_t number_dests, uint32_t * dest_ip_seq_pairs){
     rerr_header header;
     if(number_dests <= 0){
         // Should be >=1 !!!!

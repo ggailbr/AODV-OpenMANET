@@ -1,5 +1,5 @@
-#ifndef ROUTING_TABLE_H
-#define ROUTING_TABLE_H
+#ifndef __ROUTING_TABLE_H__
+#define __ROUTING_TABLE_H__
 
 #include <stdint.h>
 #include <stdio.h>
@@ -114,8 +114,8 @@ routing_entry * remove_routing_entry(routing_table table, uint32_t dest_ip);
 
 void free_entry(routing_entry *r_entry);
 
-void expiration_func(routing_entry * own_entry);
+void* expiration_func(void * thread_entry);
 
-void rreq_id_func(routing_entry * own_entry);
+void* rreq_id_func(void * thread_entry);
 
 #endif // ROUTING_TABLE_H

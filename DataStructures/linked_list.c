@@ -81,7 +81,7 @@ void remove_entry_from_list(linked_list * list, uint32_t data){
 uint32_t * get_all_entries(linked_list * list, uint32_t *size){
     if(list == NULL){
         debprintf("[ERROR] : Linked List not Initialized\n");
-        return;
+        return NULL;
     }
     linked_entry *cur_entry = list->first;
     // First total number of entries

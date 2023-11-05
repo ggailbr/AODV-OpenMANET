@@ -11,7 +11,7 @@
 #include "send_messages.h"
 
 
-#define LOGGING 0
+#define LOGGING PACKET_DROP
 #define HELLO_MESSAGES
 
 // Configuration Parameters

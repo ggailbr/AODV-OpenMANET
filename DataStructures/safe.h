@@ -10,6 +10,6 @@ typedef struct safe_s{
 
 uint32_t increment_safe(safe_32 *target);
 uint32_t read_safe(safe_32 *target);
-uint32_t write_safe(safe_32 *target, uint32_t new_number);
+void write_safe(safe_32 *target, uint32_t new_number);
 
 #endif

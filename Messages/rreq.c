@@ -14,7 +14,3 @@ uint8_t *generate_rreq_message(uint8_t flags, uint32_t rreq_id, uint32_t dest_ip
     debprintf("[PACKET-RREQ] : 0x%08x, 0x%08x, 0x%08x, 0x%08x, 0x%08x, 0x%08x", ((uint32_t *) header)[0], ((uint32_t *) header)[1], ((uint32_t *) header)[2], ((uint32_t *) header)[3], ((uint32_t *) header)[4], ((uint32_t *) header)[5]);
     return (uint8_t *) header;
 }
-
-static inline void increment_hop_rreq(uint8_t *received_packet){
-    ((rreq_header *)received_packet)->hop_count++;
-}

@@ -46,7 +46,7 @@ typedef struct rerr_header_t{
  *      I.E pass in a variable number of destination IP and sequence pairs with each as a uint32_t
  * @return Pointer to the buffer containing the formatted RERR message
  */
-uint8_t *generate_rerr_message(int *packet_length, int n, int number_dests, ...);
+uint8_t *generate_rerr_message(uint32_t *packet_length, uint8_t n, uint8_t number_dests, ...);
 
 /**
  * @brief Creates a RERR message based off of a supplied dest_ip_seq pair buffer
@@ -58,6 +58,6 @@ uint8_t *generate_rerr_message(int *packet_length, int n, int number_dests, ...)
  *  for destination and sequence numbers of unreachable nodes
  * @return Pointer to the buffer containing the formatted RERR message
  */
-uint8_t *generate_rerr_message_buff(int *packet_length, int n, int number_dests, uint32_t * dest_ip_seq_pairs);
+uint8_t *generate_rerr_message_buff(uint32_t *packet_length, uint8_t n, uint8_t number_dests, uint32_t * dest_ip_seq_pairs);
 
 #endif

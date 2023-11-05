@@ -113,8 +113,9 @@ routing_entry *get_routing_entry(routing_table table, uint32_t dest_ip){
  * 
  * @param own_entry The entry to expire on a timer
  */
-void expiration_func(routing_entry * own_entry){
+void * expiration_func(void * thread_entry){
     // Find the difference in current time and expiration time
+    routing_entry * own_entry = (routing_entry *)thread_entry;
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
     struct timespec current_time;
@@ -128,7 +129,7 @@ void expiration_func(routing_entry * own_entry){
     if(own_entry->status == ROUTE_INVALID){
         pthread_mutex_unlock(&own_entry->entry_mutex);
         free_entry(remove_routing_entry(routes, own_entry->dest_ip));
-        return;
+        return NULL;
     }
     // Otherwise, set as invalid and restart with deleting
     own_entry->status = ROUTE_INVALID;
@@ -145,6 +146,7 @@ void expiration_func(routing_entry * own_entry){
     pthread_mutex_unlock(&own_entry->entry_mutex);
     // Calling with the delete period
     expiration_func(own_entry);
+    return NULL;
 }
 
 /**
@@ -152,7 +154,8 @@ void expiration_func(routing_entry * own_entry){
  * 
  * @param own_entry The entry to monitor the RREQ_ID
  */
-void rreq_id_func(routing_entry * own_entry){
+void * rreq_id_func(void * thread_entry){
+    routing_entry * own_entry = (routing_entry *)thread_entry;
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
     struct timespec current_time;
@@ -160,6 +163,7 @@ void rreq_id_func(routing_entry * own_entry){
     while(nanosleep(&current_time, &current_time));
     pthread_mutex_lock(&own_entry->entry_mutex);
     own_entry->rreq_id = 0;
-    own_entry->rreq_id_thread = NULL;
+    own_entry->rreq_id_thread = 0;
     pthread_mutex_unlock(&own_entry->entry_mutex);
+    return NULL;
 }
