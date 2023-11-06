@@ -122,6 +122,7 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
     // If we are destination, now that we have installed the route, send a rrep and return
     if(ip_address == rreq_message->dest_ip){
         send_rrep_destination(rreq_message, sender_ip);
+        active_routes++;
         return LOGGING;
     }
     // Check for active route. If active and "d" not set, send from intermediate
