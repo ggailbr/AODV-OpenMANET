@@ -1,5 +1,5 @@
-#ifndef SAFE_H
-#define SAFE_H
+#ifndef __SAFE_H__
+#define __SAFE_H__
 #include <stdint.h>
 #include <pthread.h>
 

@@ -1,5 +1,5 @@
-#ifndef DATA_STRUCTURE_H
-#define DATA_STRUCTURE_H
+#ifndef __DATA_STRUCTURE_H__
+#define __DATA_STRUCTURE_H__
 
 #include <stdint.h>
 #include <stdio.h>

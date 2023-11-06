@@ -55,7 +55,7 @@ int main(int argc, char **argv){
     if(RegisterForwardCallback(&forwarded_messages) != 0){
         printf("Error Registering Callback\n");
     }
-    printf("Test\n");
+    debprintf("Test\n");
     pthread_create(&hello_thread, NULL, hello_interval, NULL);
     // Spin forever
     while(1);
