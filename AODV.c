@@ -55,7 +55,6 @@ int main(int argc, char **argv){
     if(RegisterForwardCallback(&forwarded_messages) != 0){
         printf("Error Registering Callback\n");
     }
-    debprintf("Test\n");
     pthread_create(&hello_thread, NULL, hello_interval, NULL);
     // Spin forever
     while(1);
@@ -111,7 +110,10 @@ uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t
     }
     // Check if we have a route already
     routing_entry * destination = get_routing_entry(routes, dest);
-    if(destination != NULL && destination->status == ROUTE_VALID){
+    // Adding in a check for valid routes and sequence numbers
+    // [TODO] The sequence number can be invalid, especially for neighbors,
+    //      but accounting for this will be a further iteration of this AODV implementation
+    if(destination != NULL && destination->status == ROUTE_VALID && destination->seq_valid == SEQ_VALID){
         debprintf("Already has a route\n");
         pthread_mutex_lock(&destination->entry_mutex);
         set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
@@ -126,7 +128,7 @@ uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t
 
 // Here will be the logic for accepting and resetting timers for forwarded packets
 uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
-    debprintf("Forwarded Message");
+    debprintf("--------------------------Forwarded Message--------------------------------------");
     routing_entry * destination = get_routing_entry(routes, dest);
     routing_entry * src_entry = get_routing_entry(routes, src);
     routing_entry * dest_hop, *origin_hop, *unreachable_dest;
@@ -191,7 +193,7 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
                         dest_ip_seq_list[((num_dests)*2)] = unreachable_dest->dest_ip;
                         dest_ip_seq_list[((num_dests)*2) + 1] = unreachable_dest->dest_seq + 1;
                         if(active_routes > 0){
-                            active_routes--;
+                            active_routes -= unreachable_dest->active_route;
                         }
                     }
                     /*
@@ -255,6 +257,7 @@ void *hello_interval(void * __unused){
         while(active_routes == 0);
         convert_ms_to_timespec(&current_time, HELLO_INTERVAL);
         while(nanosleep(&current_time, &current_time));
+        debprintf("Active routes %d\n", active_routes);
         seq = read_safe(&sequence_num);   
         rrep_message->dest_seq = seq;
         // Send it back along sender's path

@@ -108,7 +108,7 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
     }
     // Add to the routing table
     originator->status = ROUTE_VALID;
-    AddUnicastRoutingEntry(sender_ip, sender_ip);
+    AddUnicastRoutingEntry(originator->dest_ip, sender_ip);
     // Calculate minimal time
     struct timespec minimal_lifetime, current_time;
     clock_gettime(CLOCK_REALTIME, &current_time);
@@ -117,14 +117,17 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
     subtract_time(&current_time, &originator->time_out);
     // Set Expiration to max of the two
     set_expiration_timer(originator, convert_timespec_to_ms(max_timespec(&minimal_lifetime, &current_time)));
-    pthread_mutex_unlock(&originator->entry_mutex);
+    
 
     // If we are destination, now that we have installed the route, send a rrep and return
     if(ip_address == rreq_message->dest_ip){
+        originator->active_route = 1;
+        pthread_mutex_unlock(&originator->entry_mutex);
         send_rrep_destination(rreq_message, sender_ip);
         active_routes++;
         return LOGGING;
     }
+    pthread_mutex_unlock(&originator->entry_mutex);
     // Check for active route. If active and "d" not set, send from intermediate
     routing_entry * destination = get_routing_entry(routes, rreq_message->dest_ip);
     if((rreq_message->flags & RREQ_DEST_ONLY) == 0){
@@ -272,6 +275,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
         return LOGGING;
     }
     else{
+        destination->active_route = 1;
         active_routes++;
     }
     
@@ -283,6 +287,8 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
         }
         else{
             pthread_mutex_lock(&originator->entry_mutex);
+            originator->active_route = 1;
+            active_routes++;
             add_entry_to_list(originator->precursor_list, destination->next_hop);
             add_entry_to_list(destination->precursor_list, originator->next_hop);
             SendUnicast(originator->next_hop, (uint8_t *) rrep_message, sizeof(rrep_header),NULL);
@@ -347,7 +353,7 @@ uint8_t recv_rerr(uint32_t sender_ip, uint8_t * rerr_message){
             invalid_dest->status = ROUTE_INVALID;
             set_expiration_timer(invalid_dest, DELETE_PERIOD);
             if(active_routes > 0){
-                active_routes--;
+                active_routes-= invalid_dest->active_route;
             }
 
             pthread_mutex_unlock(&invalid_dest->entry_mutex);

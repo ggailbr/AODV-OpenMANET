@@ -74,7 +74,7 @@ typedef struct{
     pthread_t rreq_id_thread;
     volatile rreq_status rreq_search;
     pthread_t rreq_message_sender;
-
+    uint32_t active_route;
 } routing_entry;
 
 typedef data_header routing_table;

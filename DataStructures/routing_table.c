@@ -50,6 +50,7 @@ routing_entry * create_or_get_routing_entry(routing_table table, uint32_t dest_i
     new_entry->next_hop_for = (linked_list *) malloc(sizeof(linked_list));
     new_entry->next_hop_for->first = NULL;
     new_entry->next_hop_for->last = NULL;
+    new_entry->active_route = 0;
     add_routing_entry(table, new_entry);
     return new_entry;
 }
@@ -124,20 +125,24 @@ void * expiration_func(void * thread_entry){
     // Wait until the route should expire
     while(nanosleep(&current_time, &current_time));
     // If it expires, grab the lock
+    debprintf("Expiration waiting for lock\n");
     pthread_mutex_lock(&own_entry->entry_mutex);
     // If already invalid, delete itself
     if(own_entry->status == ROUTE_INVALID){
+        debprintf("Deleting Internal Entry for %d\n", own_entry->dest_ip);
         pthread_mutex_unlock(&own_entry->entry_mutex);
         free_entry(remove_routing_entry(routes, own_entry->dest_ip));
+        debprintf("Deleted Internal Entry\n");
         return NULL;
     }
     // Otherwise, set as invalid and restart with deleting
     own_entry->status = ROUTE_INVALID;
     // Delete Routing Table Entry
+    debprintf("Deleting route for %d off gateway %d\n", own_entry->dest_ip, own_entry->next_hop);
     DeleteEntry(own_entry->dest_ip, own_entry->next_hop);
 
     if(active_routes > 0 && own_entry->seq_valid == SEQ_VALID){
-        active_routes--;
+        active_routes -= own_entry->active_route;
     }
 
     // Restart with delete timer
