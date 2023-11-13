@@ -125,11 +125,11 @@ void * expiration_func(void * thread_entry){
     // Wait until the route should expire
     while(nanosleep(&current_time, &current_time));
     // If it expires, grab the lock
-    debprintf("Expiration waiting for lock\n");
+    debprintf("Expiration waiting for lock for %x\n", own_entry->dest_ip);
     pthread_mutex_lock(&own_entry->entry_mutex);
     // If already invalid, delete itself
     if(own_entry->status == ROUTE_INVALID){
-        debprintf("Deleting Internal Entry for %d\n", own_entry->dest_ip);
+        debprintf("Deleting Internal Entry for %x\n", own_entry->dest_ip);
         pthread_mutex_unlock(&own_entry->entry_mutex);
         free_entry(remove_routing_entry(routes, own_entry->dest_ip));
         debprintf("Deleted Internal Entry\n");
@@ -138,10 +138,11 @@ void * expiration_func(void * thread_entry){
     // Otherwise, set as invalid and restart with deleting
     own_entry->status = ROUTE_INVALID;
     // Delete Routing Table Entry
-    debprintf("Deleting route for %d off gateway %d\n", own_entry->dest_ip, own_entry->next_hop);
+    debprintf("Deleting route for %x off gateway %x\n", own_entry->dest_ip, own_entry->next_hop);
     DeleteEntry(own_entry->dest_ip, own_entry->next_hop);
 
     if(active_routes > 0 && own_entry->seq_valid == SEQ_VALID){
+        debprintf("Remove Active Route Expiration\n");
         active_routes -= own_entry->active_route;
     }
 

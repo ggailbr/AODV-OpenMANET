@@ -124,6 +124,7 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
         originator->active_route = 1;
         pthread_mutex_unlock(&originator->entry_mutex);
         send_rrep_destination(rreq_message, sender_ip);
+        debprintf("Incrementing active Route Destination RREQ\n");
         active_routes++;
         return LOGGING;
     }
@@ -276,6 +277,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
     }
     else{
         destination->active_route = 1;
+        debprintf("Incrementing Active Route RREP Hop\n");
         active_routes++;
     }
     
@@ -288,6 +290,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
         else{
             pthread_mutex_lock(&originator->entry_mutex);
             originator->active_route = 1;
+            debprintf("Incrementing Active Reverse Route RREP Hop\n");
             active_routes++;
             add_entry_to_list(originator->precursor_list, destination->next_hop);
             add_entry_to_list(destination->precursor_list, originator->next_hop);
@@ -353,6 +356,7 @@ uint8_t recv_rerr(uint32_t sender_ip, uint8_t * rerr_message){
             invalid_dest->status = ROUTE_INVALID;
             set_expiration_timer(invalid_dest, DELETE_PERIOD);
             if(active_routes > 0){
+                debprintf("Decrementing Active Route rerr\n");
                 active_routes-= invalid_dest->active_route;
             }
 
