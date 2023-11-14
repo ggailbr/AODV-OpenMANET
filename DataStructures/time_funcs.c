@@ -150,6 +150,7 @@ void set_expiration_timer(routing_entry * entry, uint32_t ms){
         clock_gettime(CLOCK_REALTIME, &entry->time_out);
         add_time_ms(&entry->time_out, ms);
     }
+    debprintf("Starting expiration for %x with timeout %d\n", entry->dest_ip, ms);
     // Start the new thread
     pthread_create(&entry->expiration_thread, NULL, expiration_func, (void *) entry);
     // pthread_mutex_unlock(&entry->entry_mutex);

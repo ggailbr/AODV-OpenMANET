@@ -228,7 +228,7 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
                 dest_ip_seq_list[0] = dest_hop->dest_ip;
                 debprintf("Setting RERR parameters\n");
                 if(dest_hop->seq_valid == SEQ_INVALID){
-                    debprintf("[RERR] Generated without valid sequence");
+                    debprintf("[RERR] Generated without valid sequence\n");
                 }
                 dest_ip_seq_list[1] = dest_hop->dest_seq;
                 num_dests += 1;
@@ -246,6 +246,7 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
                         precursor list.
                         */
                         if(unreachable_dest->precursor_list->first != NULL){
+                            debprintf("Found an unreachable dest with non-NULL precursors\n");
                             if(unreachable_dest->precursor_list->first == unreachable_dest->precursor_list->last && single_rerr == 0){
                                 single_rerr = unreachable_dest->precursor_list->first->data;
                             }
@@ -274,7 +275,6 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
                         DeleteEntry(unreachable_dest->dest_ip, unreachable_dest->next_hop);
                         unreachable_dest->status = ROUTE_INVALID;
                         set_expiration_timer(unreachable_dest, DELETE_PERIOD);
-
                         pthread_mutex_unlock(&unreachable_dest->entry_mutex);
                     }
                 }

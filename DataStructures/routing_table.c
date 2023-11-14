@@ -122,6 +122,7 @@ void * expiration_func(void * thread_entry){
     struct timespec current_time;
     clock_gettime(CLOCK_REALTIME, &current_time);
     subtract_time(&current_time, &own_entry->time_out);
+    debprintf("Expiration for %x sleeping for %d\n", own_entry->dest_ip, convert_timespec_to_ms(&current_time));
     // Wait until the route should expire
     while(nanosleep(&current_time, &current_time));
     // If it expires, grab the lock
