@@ -25,7 +25,7 @@ testbed:
 	cd MANET-Testbed; make
 
 run: AODV.out
-	sudo LD_LIBRARY_PATH=./MANET-Testbed:$LD_LIBRARY_PATH ./Build/AODV.out
+	sudo LD_LIBRARY_PATH=/home/pi/AODV-OpenMANET/MANET-Testbed:$LD_LIBRARY_PATH /home/pi/AODV-OpenMANET/Build/AODV.out
 
 clean:
 	rm -rf Build/*

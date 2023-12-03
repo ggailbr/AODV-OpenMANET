@@ -17,6 +17,7 @@ safe_32 sequence_num;
 routing_table routes;
 pthread_t hello_thread;
 volatile uint32_t active_routes = 0;
+uint32_t active_route_list[255] = {0};
 /*
  * This is a protocol main function. This is run once at the start 
  * of route creation. 
@@ -66,7 +67,7 @@ int main(int argc, char **argv){
 }
 
 uint8_t incoming_data_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
-    debprintf("Incoming Data Message\n");
+    debprintf("[INCOMING] Incoming Data Message\n");
     routing_entry * originator = get_routing_entry(routes, src);
     // If we are the destination
     if(dest == ip_address){
@@ -82,28 +83,28 @@ uint8_t incoming_data_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, ui
  * This function is called each time a message is received
 */
 uint8_t incoming_control_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
-    debprintf("Incoming Control Message\n");    
+    //debprintf("[INPUT] Incoming Control Message\n");    
     packet_type type = payload[3];
 
-    for(uint32_t i = 0; i < payload_length; i++){
-        debprintf("%02x", payload[i]);
-    }
-    debprintf("\n");
+    // for(uint32_t i = 0; i < payload_length; i++){
+    //     debprintf("%02x", payload[i]);
+    // }
+    // debprintf("\n");
     
     if(src == ip_address){
         return PACKET_DROP;
     }
     switch(type){
         case(RREQ_TYPE):
-            debprintf("Received RREQ\n");
+            debprintf("[INPUT] Received RREQ\n");
             return recv_rreq(src, (rreq_header *) payload);
             break;
         case(RREP_TYPE):
-            debprintf("Received RREP\n");
+            debprintf("[INPUT] Received RREP\n");
             return recv_rrep(src, (rrep_header *) payload);
             break;
         case(RERR_TYPE):
-            debprintf("Received RERR\n");
+            debprintf("[INPUT] Received RERR\n");
             return recv_rerr(src, payload);
             break;
         case(RREP_ACK_TYPE):
@@ -111,15 +112,15 @@ uint8_t incoming_control_message(uint8_t *raw_pack, uint32_t src, uint32_t dest,
             // Mark Route as Bidirectional
             break;
         default:
-            debprintf("[ERROR] : Unknown Packet Type\n");
+            debprintf("[INPUT, ERROR] : Unknown Packet Type\n");
     }
     return 0;
 }
 
 uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
-    debprintf("Outgoing Message\n");
+    //debprintf("[OUTPUT] Outgoing Message\n");
     if(dest == broadcast_ip){
-        debprintf("Intercepted Broadcast\n");
+        // debprintf("Intercepted Broadcast\n");
         return PACKET_ACCEPT;
     }
     // Check if we have a route already
@@ -129,24 +130,25 @@ uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t
     // [TODO] The sequence number can be invalid, especially for neighbors,
     //      but accounting for this will be a further iteration of this AODV implementation
     // Also, need to account that next hop is still valid before sending out. This means hello messages or RREQ should be used or a ping or some method.
-    if(destination != NULL && destination->status == ROUTE_VALID && destination->seq_valid == SEQ_VALID && (next_hop = get_routing_entry(routes, destination->next_hop)) != NULL && next_hop->status == ROUTE_VALID){
-        debprintf("Already has a route\n");
-        pthread_mutex_lock(&destination->entry_mutex);
-        set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
-        pthread_mutex_unlock(&destination->entry_mutex);
+    if(destination != NULL && destination->status == ROUTE_VALID && destination->seq_valid == SEQ_VALID && (destination->next_hop == destination->dest_ip || ((next_hop = get_routing_entry(routes, destination->next_hop)) != NULL && next_hop->status == ROUTE_VALID))){
+        //debprintf("[OUTPUT] Already has a route\n");
+        // I do not think we should refresh on sending out a packet
+        //pthread_mutex_lock(&destination->entry_mutex);
+        //set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
+        //pthread_mutex_unlock(&destination->entry_mutex);
         // Pass Packet
-        return 1;
+        return PACKET_ACCEPT;
     }
     // Next Hop is invalid for valid destination
     if(destination != NULL && destination->status == ROUTE_VALID && destination->seq_valid == SEQ_VALID){
-        debprintf("Active dest, but not active next_hop\n");
+        debprintf("[OUTPUT, RERR] Active dest, but not active next_hop\n");
         pthread_mutex_lock(&destination->entry_mutex);
 
-        debprintf("Deleting route for %x off gateway %x\n", destination->dest_ip, destination->next_hop);
+        debprintf("[OUTPUT, RERR] Deleting route for %x off gateway %x\n", destination->dest_ip, destination->next_hop);
         destination->status = ROUTE_INVALID;
         DeleteEntry(destination->dest_ip, destination->next_hop);
         if(active_routes > 0 && destination->seq_valid == SEQ_VALID){
-            debprintf("Remove Active Route Outgoing\n");
+            debprintf("[A_R, OUTPUT, RERR] Remove Active Route Outgoing %d\n", destination->dest_ip);
             active_routes -= destination->active_route;
         }
 
@@ -155,7 +157,7 @@ uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t
         pthread_mutex_unlock(&destination->entry_mutex);
     }
     // Search for a route
-    debprintf("Does Not Have a Route\n");
+    debprintf("[OUTPUT] Does Not Have a Route\n");
     return send_rreq(dest);
 }
 
@@ -169,31 +171,31 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
     do{
         // If we have a route
         if(destination != NULL){
-            debprintf("Forwarded Packet has Destination Entry\n");
+            debprintf("[FORWARD] Forwarded Packet has Destination Entry\n");
             pthread_mutex_lock(&destination->entry_mutex);
-            debprintf("Locked %x\n", destination->dest_ip);
+            debprintf("[FORWARD] Locked %x\n", destination->dest_ip);
             dest_hop = get_routing_entry(routes, destination->next_hop);
             if(dest_hop == NULL){
                 continue;
             }
-            debprintf("Got Dest_hop\n");
+            debprintf("[FORWARD] Got Dest_hop\n");
             if(dest_hop->dest_ip != destination->dest_ip){
                 pthread_mutex_lock(&dest_hop->entry_mutex);
             }
             // And the route is valid and thenext hop is valid
             if(destination->status == ROUTE_VALID && dest_hop->status == ROUTE_VALID){
-                debprintf("Has a valid destination and valid next hop\n");
+                debprintf("[FORWARD] Has a valid destination and valid next hop\n");
                 if(dest_hop->dest_ip != destination->dest_ip){
                     pthread_mutex_unlock(&dest_hop->entry_mutex);
                 }
                 // Updating all of the timers
-                debprintf("Reseting destination entry expiration\n");
+                debprintf("[FORWARD] Reseting destination entry expiration\n");
                 set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
                 if(src_entry != NULL){
-                    debprintf("Reseting destination entry expiration\n");
+                    debprintf("[FORWARD] Reseting destination entry expiration\n");
                     pthread_mutex_lock(&src_entry->entry_mutex);
-                    debprintf("Locked %x\n", src_entry->dest_ip);
-                    debprintf("Reseting Source entry expiration\n");
+                    debprintf("[FORWARD] Locked %x\n", src_entry->dest_ip);
+                    debprintf("[FORWARD] Reseting Source entry expiration\n");
                     set_expiration_timer(src_entry, ACTIVE_ROUTE_TIMEOUT);
                     // May be unessary due to Hello Message
                     // if((origin_hop = get_routing_entry(routes, src_entry->next_hop)) != NULL){
@@ -205,36 +207,36 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
                     //     debprintf("UnLocked %x\n", origin_hop->dest_ip);
                     // }
                     pthread_mutex_unlock(&src_entry->entry_mutex);
-                    debprintf("UnLocked %x\n", src_entry->dest_ip);
+                    debprintf("[FORWARD] UnLocked %x\n", src_entry->dest_ip);
                 }
                 pthread_mutex_unlock(&destination->entry_mutex);
-                debprintf("Unocked %x\n", destination->dest_ip);
+                debprintf("[FORWARD] Unocked %x\n", destination->dest_ip);
                 return PACKET_ACCEPT;
             }
             // RERR condition 1
             // I.E Link break in next hop of active route
             else if(destination->status == ROUTE_VALID && dest_hop != NULL){
-                debprintf("Has a valid destination and next hop entry, but next hop is not valid\n");
+                debprintf("[FORWARD, RERR] Has a valid destination and next hop entry, but next hop is not valid\n");
                 // [TODO] Attempt Link Repair
                 // If link repair fails
                 uint32_t size = 0, num_dests = 0;
                 uint32_t single_rerr = 0;
                 uint8_t broadcast_rerr = 0;
                 pthread_mutex_lock(&dest_hop->entry_mutex);
-                debprintf("Locking %x\n", dest_hop->dest_ip);
+                debprintf("[FORWARD, RERR] Locking %x\n", dest_hop->dest_ip);
                 uint32_t * destination_list = get_all_entries(dest_hop->next_hop_for, &size);
-                debprintf("Grabbing all entries in destination_list\n");
+                debprintf("[FORWARD, RERR] Grabbing all entries in destination_list\n");
                 uint32_t *dest_ip_seq_list = (uint32_t *) malloc(sizeof(uint32_t) * 2 * (size + 1));
                 dest_ip_seq_list[0] = dest_hop->dest_ip;
-                debprintf("Setting RERR parameters\n");
+                debprintf("[FORWARD, RERR] Setting RERR parameters\n");
                 if(dest_hop->seq_valid == SEQ_INVALID){
-                    debprintf("[RERR] Generated without valid sequence\n");
+                    debprintf("[FORWARD, RERR] Generated without valid sequence\n");
                 }
                 dest_ip_seq_list[1] = dest_hop->dest_seq;
                 num_dests += 1;
-                debprintf("Setting up to delete %x\n", dest_hop->dest_ip);
+                debprintf("[FORWARD, RERR] Setting up to delete %x\n", dest_hop->dest_ip);
                 set_expiration_timer(dest_hop, DELETE_PERIOD);
-                debprintf("unlocking %x\n", dest_hop->dest_ip);
+                debprintf("[FORWARD, RERR] unlocking %x\n", dest_hop->dest_ip);
                 pthread_mutex_unlock(&dest_hop->entry_mutex);
                 for(int i = 0; i < size; i++){
                     unreachable_dest = get_routing_entry(routes, destination_list[i]);
@@ -246,7 +248,7 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
                         precursor list.
                         */
                         if(unreachable_dest->precursor_list->first != NULL){
-                            debprintf("Found an unreachable dest with non-NULL precursors\n");
+                            debprintf("[FORWARD, RERR] Found an unreachable dest with non-NULL precursors\n");
                             if(unreachable_dest->precursor_list->first == unreachable_dest->precursor_list->last && single_rerr == 0){
                                 single_rerr = unreachable_dest->precursor_list->first->data;
                             }
@@ -257,7 +259,7 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
                             dest_ip_seq_list[((num_dests)*2)] = unreachable_dest->dest_ip;
                             dest_ip_seq_list[((num_dests)*2) + 1] = unreachable_dest->dest_seq + 1;
                             if(active_routes > 0){
-                                debprintf("Remove Active Route Forwarded\n");
+                                debprintf("[A_R, FORWARD, RERR] Remove Active Route Forwarded %d\n", unreachable_dest->dest_ip);
                                 active_routes -= unreachable_dest->active_route;
                             }
                         }
@@ -296,13 +298,13 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
         }
     }while(0);
 
-    debprintf("Does not have a Destination Entry or next hop entry\n");
+    debprintf("[RERR] Does not have a Destination Entry or next hop entry\n");
     // RERR Condition 2
     // Destined for node which it does not have an active route for
     uint8_t * rerr_buff;
     uint32_t size = 0;
     if(destination == NULL){
-        debprintf("[RERR] No Destination Entry");
+        debprintf("[RERR] [RERR] No Destination Entry");
         rerr_buff = generate_rerr_message(&size, 0, 1, dest, 0);
     }
     else{
@@ -324,7 +326,7 @@ void *hello_interval(void * __unused){
         while(active_routes == 0);
         convert_ms_to_timespec(&current_time, HELLO_INTERVAL);
         while(nanosleep(&current_time, &current_time));
-        debprintf("Active routes %d\n", active_routes);
+        debprintf("[A_R] Active routes %d\n", active_routes);
         seq = read_safe(&sequence_num);   
         rrep_message->dest_seq = seq;
         // Send it back along sender's path

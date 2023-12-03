@@ -124,7 +124,7 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
         originator->active_route = 1;
         pthread_mutex_unlock(&originator->entry_mutex);
         send_rrep_destination(rreq_message, sender_ip);
-        debprintf("Incrementing active Route Destination RREQ\n");
+        debprintf("[A_R, RREQ] Incrementing active Route Destination RREQ %d\n", originator->dest_ip);
         active_routes++;
         return LOGGING;
     }
@@ -230,7 +230,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
         || destination->seq_valid == SEQ_INVALID 
         || seq_compare(rrep_message->dest_seq, destination->dest_seq) >= 0 
         || (rrep_message->dest_seq == destination->dest_seq && destination->status == ROUTE_INVALID)
-        || (rrep_message->dest_seq == destination->dest_seq && rrep_message->hop_count < destination->hop_count)){
+        || (rrep_message->dest_seq == destination->dest_seq && rrep_message->hop_count < destination->hop_count && rrep_message->src_ip != 0x0)){
     /*
      If the route table entry to the destination is created or updated,
    then the following actions occur:
@@ -257,13 +257,16 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
         destination->hop_count = rrep_message->hop_count;
         set_expiration_timer(destination, rrep_message->lifetime);
         destination->dest_seq = rrep_message->dest_seq;
+        // AddUnicastRoutingEntry(rrep_message->dest_ip, sender_ip);
     }
     // Otherwise, still reset the expiration timer
     else{
         set_expiration_timer(destination, rrep_message->lifetime);
     }
     destination->status = ROUTE_VALID;
-    AddUnicastRoutingEntry(rrep_message->dest_ip, sender_ip);
+    if(rrep_message->src_ip != 0x0){
+        AddUnicastRoutingEntry(rrep_message->dest_ip, sender_ip);
+    }
 
     // If this is a hello message
     if(rrep_message->src_ip == 0x0){
@@ -277,7 +280,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
     }
     else{
         destination->active_route = 1;
-        debprintf("Incrementing Active Route RREP Hop\n");
+        debprintf("[A_R, RREP] Incrementing Active Route RREP Hop %d\n", destination->dest_ip);
         active_routes++;
     }
     
@@ -290,7 +293,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
         else{
             pthread_mutex_lock(&originator->entry_mutex);
             originator->active_route = 1;
-            debprintf("Incrementing Active Reverse Route RREP Hop\n");
+            debprintf("[A_R, RREP] Incrementing Active Reverse Route RREP Hop %d\n", originator->dest_ip);
             active_routes++;
             add_entry_to_list(originator->precursor_list, destination->next_hop);
             add_entry_to_list(destination->precursor_list, originator->next_hop);
@@ -356,7 +359,7 @@ uint8_t recv_rerr(uint32_t sender_ip, uint8_t * rerr_message){
             invalid_dest->status = ROUTE_INVALID;
             set_expiration_timer(invalid_dest, DELETE_PERIOD);
             if(active_routes > 0){
-                debprintf("Decrementing Active Route rerr\n");
+                debprintf("[A_R, RERR] Decrementing Active Route rerr\n");
                 active_routes-= invalid_dest->active_route;
             }
 

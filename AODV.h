@@ -7,7 +7,7 @@
 #include "manet_testbed.h"
 
 
-#define LOGGING PACKET_DROP
+#define LOGGING PACKET_ACCEPT
 #define HELLO_MESSAGES
 
 // Configuration Parameters

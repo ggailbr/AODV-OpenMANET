@@ -2,6 +2,7 @@ import socket
 import os
 from pathlib import Path
 import argparse
+import binascii
 
 mac_addresses_location = Path('/etc/ethers')
 class TestCoordinator():
@@ -53,7 +54,8 @@ if __name__ == '__main__':
     test = TestCoordinator()
     test.exclude(args.exclude)
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.bind(("192.168.1.7", 269))
+        sock.bind(("", 269))
         while True:
             data, addr = sock.recvfrom(1024) # buffer size is 1024 bytes
-            print("received message: %s" % data)
+            print("received message: %s" % binascii.hexlify(data))
+            print(addr)
