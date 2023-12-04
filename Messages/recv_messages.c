@@ -179,30 +179,54 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
 
     // Create route to previous hop
     uint8_t new = 0;
-    // Check if this is a hello message
-    if(rrep_message->src_ip != 0x0){
-        // Get entry to sender
-        routing_entry * previous_hop = create_or_get_routing_entry(routes, sender_ip, 0, SEQ_INVALID, sender_ip, 0, ACTIVE_ROUTE_TIMEOUT, &new);
-        // Set that as a valid route
-        pthread_mutex_lock(&previous_hop->entry_mutex);
-        previous_hop->status = ROUTE_VALID;
-        // Add to the routing table
-        AddUnicastRoutingEntry(sender_ip, sender_ip);
-        // Creating a List of where this is next hop for
-        if(is_in_list(previous_hop->next_hop_for, rrep_message->dest_ip) == 0){
-            add_entry_to_list(previous_hop->next_hop_for, rrep_message->dest_ip);
-        }
 
-        // If this is an existing entry, reset expiration
-        if(new == 0){
-            // May not need
-            clock_gettime(CLOCK_REALTIME, &previous_hop->time_out);
-            add_time_ms(&previous_hop->time_out, ACTIVE_ROUTE_TIMEOUT);
+    // Handle Hello Messages
+    if(rrep_message->src_ip == 0x0){
+        // Increment hop in rrep
+        increment_hop_rrep((uint8_t *) rrep_message);
+
+        //Create forward route
+        destination = create_or_get_routing_entry(routes, rrep_message->dest_ip, rrep_message->dest_seq, SEQ_VALID, sender_ip, rrep_message->hop_count, rrep_message->lifetime, &new);
+        pthread_mutex_lock(&destination->entry_mutex);
+        if(new == 1 
+            || destination->seq_valid == SEQ_INVALID 
+            || seq_compare(rrep_message->dest_seq, destination->dest_seq) >= 0)
+        {
+            destination->seq_valid = SEQ_VALID;
+            set_expiration_timer(destination, rrep_message->lifetime);
+            destination->dest_seq = rrep_message->dest_seq;
         }
-        // (Re)Start the expiration timer for the previous hop
-        set_expiration_timer(previous_hop, 0);
-        pthread_mutex_unlock(&previous_hop->entry_mutex);
+        pthread_mutex_unlock(&destination->entry_mutex);
+        // If we require an ack
+        if((rrep_message->flags & RREP_ACK) != 0){
+            //[TODO]
+            return LOGGING;
+        }
+        return LOGGING;
     }
+
+    // Check if this is a hello message
+    // Get entry to sender
+    routing_entry * previous_hop = create_or_get_routing_entry(routes, sender_ip, 0, SEQ_INVALID, sender_ip, 0, ACTIVE_ROUTE_TIMEOUT, &new);
+    // Set that as a valid route
+    pthread_mutex_lock(&previous_hop->entry_mutex);
+    previous_hop->status = ROUTE_VALID;
+    // Add to the routing table
+    AddUnicastRoutingEntry(sender_ip, sender_ip);
+    // Creating a List of where this is next hop for
+    if(is_in_list(previous_hop->next_hop_for, rrep_message->dest_ip) == 0){
+        add_entry_to_list(previous_hop->next_hop_for, rrep_message->dest_ip);
+    }
+
+    // If this is an existing entry, reset expiration
+    if(new == 0){
+        // May not need
+        clock_gettime(CLOCK_REALTIME, &previous_hop->time_out);
+        add_time_ms(&previous_hop->time_out, ACTIVE_ROUTE_TIMEOUT);
+    }
+    // (Re)Start the expiration timer for the previous hop
+    set_expiration_timer(previous_hop, 0);
+    pthread_mutex_unlock(&previous_hop->entry_mutex);
 
     // Increment hop in rrep
     increment_hop_rrep((uint8_t *) rrep_message);
@@ -230,7 +254,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
         || destination->seq_valid == SEQ_INVALID 
         || seq_compare(rrep_message->dest_seq, destination->dest_seq) >= 0 
         || (rrep_message->dest_seq == destination->dest_seq && destination->status == ROUTE_INVALID)
-        || (rrep_message->dest_seq == destination->dest_seq && rrep_message->hop_count < destination->hop_count && rrep_message->src_ip != 0x0)){
+        || (rrep_message->dest_seq == destination->dest_seq && rrep_message->hop_count < destination->hop_count)){
     /*
      If the route table entry to the destination is created or updated,
    then the following actions occur:
@@ -257,32 +281,17 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
         destination->hop_count = rrep_message->hop_count;
         set_expiration_timer(destination, rrep_message->lifetime);
         destination->dest_seq = rrep_message->dest_seq;
-        // AddUnicastRoutingEntry(rrep_message->dest_ip, sender_ip);
+        AddUnicastRoutingEntry(rrep_message->dest_ip, sender_ip);
     }
     // Otherwise, still reset the expiration timer
     else{
         set_expiration_timer(destination, rrep_message->lifetime);
     }
     destination->status = ROUTE_VALID;
-    if(rrep_message->src_ip != 0x0){
-        AddUnicastRoutingEntry(rrep_message->dest_ip, sender_ip);
-    }
-
-    // If this is a hello message
-    if(rrep_message->src_ip == 0x0){
-        pthread_mutex_unlock(&destination->entry_mutex);
-        // If we require an ack
-        if((rrep_message->flags & RREP_ACK) != 0){
-            //[TODO]
-            return LOGGING;
-        }
-        return LOGGING;
-    }
-    else{
-        destination->active_route = 1;
-        debprintf("[A_R, RREP] Incrementing Active Route RREP Hop %d\n", destination->dest_ip);
-        active_routes++;
-    }
+    AddUnicastRoutingEntry(rrep_message->dest_ip, sender_ip);
+    destination->active_route = 1;
+    debprintf("[A_R, RREP] Incrementing Active Route RREP Hop %d\n", destination->dest_ip);
+    active_routes++;
     
     // If we are not the originator of the rreq, add precursors
     if(ip_address != rrep_message->src_ip){

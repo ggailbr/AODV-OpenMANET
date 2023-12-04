@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <pthread.h>
 #include <sched.h>
+#include <time.h>
 #include "AODV.h"
 #include "rreq.h"
 #include "send_messages.h"
@@ -108,8 +109,10 @@ void send_rrep_intermediate(rreq_header *message, uint32_t sender){
  */
 uint8_t send_rreq(uint32_t dest_addr){
     uint8_t new;
+    char timing_buff[80];
+    clock_t starting_time = clock();
     rreq_status outcome = SEARCH_NONE;
-    debprintf("Getting destination entry\n");
+    debprintf("[RREQ] Getting destination entry\n");
     routing_entry * dest_entry = create_or_get_routing_entry(routes, dest_addr, 0, SEQ_INVALID, 0, 0, MY_ROUTE_TIMEOUT, &new);
     // If we recently failed, drop the packet
     if(dest_entry->rreq_search == SEARCH_FAILED && dest_entry->status == ROUTE_INVALID){
@@ -117,7 +120,7 @@ uint8_t send_rreq(uint32_t dest_addr){
     }
     // Make sure not already searching and it not a new thread
     if(new == 0 && dest_entry->rreq_search != SEARCH_SEARCHING){
-        debprintf("Was not Searching for a route, but entry exists\n");
+        debprintf("[RREQ] Was not Searching for a route, but entry exists\n");
         if(!(dest_entry->expiration_thread == 0)){
             pthread_cancel(dest_entry->expiration_thread);
         }
@@ -126,7 +129,7 @@ uint8_t send_rreq(uint32_t dest_addr){
     // Make sure we are not searching for route already
     if(dest_entry->rreq_search != SEARCH_SEARCHING){
         
-        debprintf("Creating a Route Request Thread\n");
+        debprintf("[RREQ] Creating a Route Request Thread\n");
         // Locking entry and starting rreq thread
         pthread_mutex_lock(&dest_entry->entry_mutex);
         // Start the search
@@ -138,7 +141,7 @@ uint8_t send_rreq(uint32_t dest_addr){
     // Wait until we are no longer searching
     // [TODO] Could coded with better threading practices
     
-    debprintf("Waiting until the searching status changes\n");
+    debprintf("[RREQ] Waiting until the searching status changes\n");
     while(dest_entry->rreq_search == SEARCH_SEARCHING){
         sched_yield();
     }
@@ -146,19 +149,22 @@ uint8_t send_rreq(uint32_t dest_addr){
     pthread_mutex_lock(&dest_entry->entry_mutex);
     outcome = dest_entry->rreq_search;
     pthread_mutex_unlock(&dest_entry->entry_mutex);
+    // Attempting self Unicast
+    sprintf(timing_buff, "[RREQ] %d, %ld, %ld", outcome, clock()-starting_time, CLOCKS_PER_SEC);
+    SendUnicast(ip_address, (uint8_t *)timing_buff, sizeof(timing_buff), NULL);
 
     // If it was a failure
     if(outcome == SEARCH_FAILED){
-        debprintf("Search Failed, dropping packet\n");
+        debprintf("[RREQ] Search Failed, dropping packet\n");
         pthread_mutex_lock(&dest_entry->entry_mutex);
-        set_expiration_timer(dest_entry, 1000);
+        set_expiration_timer(dest_entry, 500);
         pthread_mutex_unlock(&dest_entry->entry_mutex);
         // Drop Packet
         return PACKET_DROP;
     }
     else{
         // Accept Packets
-        debprintf("Search Succeded, sending packet\n");
+        debprintf("[RREQ] Search Succeded, sending packet\n");
         dest_entry->rreq_search = SEARCH_NONE;
         return PACKET_ACCEPT;
     }

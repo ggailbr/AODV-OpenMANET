@@ -92,7 +92,7 @@ uint8_t incoming_control_message(uint8_t *raw_pack, uint32_t src, uint32_t dest,
     // debprintf("\n");
     
     if(src == ip_address){
-        return PACKET_DROP;
+        return PACKET_ACCEPT;
     }
     switch(type){
         case(RREQ_TYPE):
@@ -119,7 +119,7 @@ uint8_t incoming_control_message(uint8_t *raw_pack, uint32_t src, uint32_t dest,
 
 uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
     //debprintf("[OUTPUT] Outgoing Message\n");
-    if(dest == broadcast_ip){
+    if(dest == broadcast_ip || dest == ip_address){
         // debprintf("Intercepted Broadcast\n");
         return PACKET_ACCEPT;
     }
@@ -132,10 +132,10 @@ uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t
     // Also, need to account that next hop is still valid before sending out. This means hello messages or RREQ should be used or a ping or some method.
     if(destination != NULL && destination->status == ROUTE_VALID && destination->seq_valid == SEQ_VALID && (destination->next_hop == destination->dest_ip || ((next_hop = get_routing_entry(routes, destination->next_hop)) != NULL && next_hop->status == ROUTE_VALID))){
         //debprintf("[OUTPUT] Already has a route\n");
-        // I do not think we should refresh on sending out a packet
-        //pthread_mutex_lock(&destination->entry_mutex);
-        //set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
-        //pthread_mutex_unlock(&destination->entry_mutex);
+        // ? I do not think we should refresh on sending out a packet
+        pthread_mutex_lock(&destination->entry_mutex);
+        set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
+        pthread_mutex_unlock(&destination->entry_mutex);
         // Pass Packet
         return PACKET_ACCEPT;
     }
