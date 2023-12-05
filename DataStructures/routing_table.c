@@ -17,8 +17,12 @@ routing_table create_routing_table(){
  */
 void free_entry(routing_entry *r_entry){
     //pthread_cancel(r_entry->expiration_thread);
-    pthread_cancel(r_entry->rreq_id_thread);
-    pthread_cancel(r_entry->rreq_message_sender);
+    if(r_entry->rreq_id_thread != 0){
+        pthread_cancel(r_entry->rreq_id_thread);
+    }
+    if(r_entry->rreq_message_sender != 0){
+        pthread_cancel(r_entry->rreq_message_sender);
+    }
     pthread_mutex_destroy(&r_entry->entry_mutex);
     free_linked_list(r_entry->precursor_list);
     free_linked_list(r_entry->next_hop_for);
@@ -51,6 +55,9 @@ routing_entry * create_or_get_routing_entry(routing_table table, uint32_t dest_i
     new_entry->next_hop_for->first = NULL;
     new_entry->next_hop_for->last = NULL;
     new_entry->active_route = 0;
+    new_entry->expiration_thread = 0;
+    new_entry->rreq_id_thread = 0;
+    new_entry->rreq_message_sender = 0;
     add_routing_entry(table, new_entry);
     return new_entry;
 }
@@ -116,7 +123,7 @@ routing_entry *get_routing_entry(routing_table table, uint32_t dest_ip){
  */
 void * expiration_func(void * thread_entry){
     pthread_detach(pthread_self());
-    debprintf("[EXPIR] Enter Expiration Thread\n");
+    // debprintf("[EXPIR] Enter Expiration Thread %ld\n", ((routing_entry *) thread_entry)->expiration_thread);
     // Find the difference in current time and expiration time
     routing_entry * own_entry = (routing_entry *)thread_entry;
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);

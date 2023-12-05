@@ -21,6 +21,7 @@ void *send_rreq_thread(void *thread_entry);
  * @param sender_ip The IP of the sender
  */
 void send_rrep_destination(rreq_header *message, uint32_t sender_ip){
+    // debprintf("[RREP] Sending Destination\n");
     // Incrementing seq number and setting to max to received and incremented
     /*
     6.1) -  Immediately before a destination node originates a RREP in
@@ -62,6 +63,7 @@ void send_rrep_destination(rreq_header *message, uint32_t sender_ip){
  * @param sender The forwarder of the rreq
  */
 void send_rrep_intermediate(rreq_header *message, uint32_t sender){
+    // debprintf("[RREP] Sending Intermediate\n");
     // Getting "fresh enough" route entry
     routing_entry *dest_entry = get_routing_entry(routes, message->dest_ip);
     // Lock entry for reading
@@ -123,6 +125,7 @@ uint8_t send_rreq(uint32_t dest_addr){
         debprintf("[RREQ] Was not Searching for a route, but entry exists\n");
         if(!(dest_entry->expiration_thread == 0)){
             pthread_cancel(dest_entry->expiration_thread);
+            // printf("Canceling %ld\n", dest_entry->expiration_thread);
         }
         dest_entry->expiration_thread = 0;
     }
@@ -180,6 +183,10 @@ uint8_t send_rreq(uint32_t dest_addr){
  * @param dest_entry The destination entry to send the rreq for
  */
 void *send_rreq_thread(void *thread_entry){
+    // debprintf("[RREQ_T] Starting Thread %ld\n", ((routing_entry *) thread_entry)->rreq_message_sender);
+    pthread_detach(pthread_self());
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
     routing_entry * dest_entry = (routing_entry *) thread_entry;
     // Assuming the sequence number should only be incremented
     //  at start of attempting to send
@@ -234,8 +241,9 @@ void *send_rreq_thread(void *thread_entry){
         while(nanosleep(&wait_time, &wait_time));
     }
     // Start expiration thread on failure
-    debprintf("Sending RREQ FAILED\n");
+    debprintf("[RREQ_T] Sending RREQ FAILED\n");
     pthread_mutex_lock(&dest_entry->entry_mutex);
+    debprintf("[RREQ_T] Changed Status\n");
     dest_entry->rreq_message_sender = 0;
     dest_entry->rreq_search = SEARCH_FAILED;
     set_expiration_timer(dest_entry, 2 * NET_TRAVERSAL_TIME);

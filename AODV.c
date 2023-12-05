@@ -92,7 +92,7 @@ uint8_t incoming_control_message(uint8_t *raw_pack, uint32_t src, uint32_t dest,
     // debprintf("\n");
     
     if(src == ip_address){
-        return PACKET_ACCEPT;
+        return LOGGING;
     }
     switch(type){
         case(RREQ_TYPE):
@@ -318,6 +318,7 @@ uint8_t forwarded_messages(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8
 
 #ifdef HELLO_MESSAGES
 void *hello_interval(void * __unused){
+    pthread_detach(pthread_self());
     struct timespec current_time;
     uint32_t seq = read_safe(&sequence_num);
     uint8_t *rrep_buf = generate_rrep_message(0, 0, ip_address, seq, 0x0, ALLOWED_HELLO_LOSS * HELLO_INTERVAL);

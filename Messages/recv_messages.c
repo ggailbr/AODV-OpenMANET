@@ -8,6 +8,7 @@
 
 
 uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
+    // debprintf("[RREQ] Received RREQ\n");
     // Create route to previous hop
     uint8_t new = 0;
     // Get entry to sender
@@ -34,6 +35,7 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
     // If this is our RREQ
     // Prevent retransmission of our own RREQ
     if(rreq_message->src_ip == ip_address){
+        // debprintf("[RREP] Was our own RREQ\n");
         return LOGGING;
     }
 
@@ -165,6 +167,7 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
 }
 
 uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
+    // debprintf("[RREP] Received RREP\n");
     // If we are the originator of rreq, immediately stop rreq thread
     routing_entry * destination = get_routing_entry(routes ,rrep_message->dest_ip);
     // (Can be NULL in the case of a HELLO message)
@@ -172,7 +175,11 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
         pthread_mutex_lock(&destination->entry_mutex);
         // Signal a route has been found
         destination->rreq_search = SEARCH_FOUND;
-        pthread_cancel(destination->rreq_message_sender);
+        if(destination->rreq_message_sender != 0){
+            pthread_cancel(destination->rreq_message_sender);
+            // printf("Canceling %ld\n", destination->rreq_message_sender);
+            destination->rreq_message_sender = 0;
+        }
         destination->rreq_message_sender = 0;
         pthread_mutex_unlock(&destination->entry_mutex);
     }
@@ -321,6 +328,7 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
 }
 
 uint8_t recv_rerr(uint32_t sender_ip, uint8_t * rerr_message){
+    // debprintf("[RERR] Received RERR\n");
     // Seperating out the header and the pairs
     rerr_header * rerr_message_header = (rerr_header *) rerr_message;
     uint32_t *dest_pairs = (uint32_t *) (&rerr_message[sizeof(rerr_header)]);
