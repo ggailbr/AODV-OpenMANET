@@ -21,6 +21,9 @@ debug: AODV.c $(SOURCES)
 remote:
 	cd MANET-Testbed; git pull origin main; make
 
+command:
+	gcc -Wall -o ~/Documents/commands command_infrastructure.c -lpthread
+
 testbed:
 	cd MANET-Testbed; make
 
