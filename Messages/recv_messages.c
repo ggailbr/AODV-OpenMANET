@@ -123,11 +123,15 @@ uint8_t recv_rreq(uint32_t sender_ip, rreq_header * rreq_message){
 
     // If we are destination, now that we have installed the route, send a rrep and return
     if(ip_address == rreq_message->dest_ip){
-        originator->active_route = 1;
+        // This can happen if the route is lost for some reason on the other end without it being
+        // noticed by this end
+        if(originator->active_route == 0){
+            originator->active_route = 1;
+            debprintf("[A_R, RREQ] Incrementing active Route Destination RREQ %d\n", originator->dest_ip);
+            active_routes++;
+        }
         pthread_mutex_unlock(&originator->entry_mutex);
         send_rrep_destination(rreq_message, sender_ip);
-        debprintf("[A_R, RREQ] Incrementing active Route Destination RREQ %d\n", originator->dest_ip);
-        active_routes++;
         return LOGGING;
     }
     pthread_mutex_unlock(&originator->entry_mutex);
@@ -211,8 +215,6 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
         }
         return LOGGING;
     }
-
-    // Check if this is a hello message
     // Get entry to sender
     routing_entry * previous_hop = create_or_get_routing_entry(routes, sender_ip, 0, SEQ_INVALID, sender_ip, 0, ACTIVE_ROUTE_TIMEOUT, &new);
     // Set that as a valid route
@@ -296,9 +298,11 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
     }
     destination->status = ROUTE_VALID;
     AddUnicastRoutingEntry(rrep_message->dest_ip, sender_ip);
-    destination->active_route = 1;
-    debprintf("[A_R, RREP] Incrementing Active Route RREP Hop %d\n", destination->dest_ip);
-    active_routes++;
+    if(destination->active_route == 0){
+        destination->active_route = 1;
+        debprintf("[A_R, RREP] Incrementing Active Route RREP Hop %d\n", destination->dest_ip);
+        active_routes++;
+    }
     
     // If we are not the originator of the rreq, add precursors
     if(ip_address != rrep_message->src_ip){
@@ -308,9 +312,11 @@ uint8_t recv_rrep(uint32_t sender_ip, rrep_header * rrep_message){
         }
         else{
             pthread_mutex_lock(&originator->entry_mutex);
-            originator->active_route = 1;
-            debprintf("[A_R, RREP] Incrementing Active Reverse Route RREP Hop %d\n", originator->dest_ip);
-            active_routes++;
+            if(originator->active_route == 0){
+                originator->active_route = 1;
+                debprintf("[A_R, RREP] Incrementing Active Reverse Route RREP Hop %d\n", originator->dest_ip);
+                active_routes++;
+            }
             add_entry_to_list(originator->precursor_list, destination->next_hop);
             add_entry_to_list(destination->precursor_list, originator->next_hop);
             SendUnicast(originator->next_hop, (uint8_t *) rrep_message, sizeof(rrep_header),NULL);

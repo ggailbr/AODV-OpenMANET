@@ -144,7 +144,7 @@ void set_expiration_timer(routing_entry * entry, uint32_t ms){
     // Stop Any Old Timer
     if(!(entry->expiration_thread == 0)){
         pthread_cancel(entry->expiration_thread);
-        // printf("[SET_EXPIR] Canceling %ld\n", entry->expiration_thread);
+        // debprintf("[SET_EXPIR] Canceling %ld\n", entry->expiration_thread);
         entry->expiration_thread = 0;
     }
     // Check if the user provided a time
@@ -168,7 +168,7 @@ void start_rreq_timer(routing_entry * entry){
     // Stop Any Old Timer
     if(!(entry->rreq_id_thread == 0)){
         pthread_cancel(entry->rreq_id_thread);
-        // printf("[RREQ_TIM] Canceling %ld\n", entry->rreq_id_thread);
+        // debprintf("[RREQ_TIM] Canceling %ld\n", entry->rreq_id_thread);
     }
     // Start the new thread
     pthread_create(&entry->rreq_id_thread, NULL, rreq_id_func, (void *) entry);

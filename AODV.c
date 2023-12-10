@@ -49,13 +49,13 @@ int main(int argc, char **argv){
     broadcast_ip = GetInterfaceIP((uint8_t *)"wlan0", 1);
     // Register our functions
     if(RegisterIncomingCallback(&incoming_control_message, &incoming_data_message) != 0){
-        printf("Error Registering Callback\n");
+        debprintf("Error Registering Callback\n");
     }
     if(RegisterOutgoingCallback(&outgoing_message) != 0){
-        printf("Error Registering Callback\n");
+        debprintf("Error Registering Callback\n");
     }
     if(RegisterForwardCallback(&forwarded_messages) != 0){
-        printf("Error Registering Callback\n");
+        debprintf("Error Registering Callback\n");
     }
     pthread_create(&hello_thread, NULL, hello_interval, NULL);
     // Spin forever
@@ -67,10 +67,11 @@ int main(int argc, char **argv){
 }
 
 uint8_t incoming_data_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t *payload, uint32_t payload_length){
-    debprintf("[INCOMING] Incoming Data Message\n");
+    debprintf("[INCOMING] Incoming Data Message from %x\n", src);
     routing_entry * originator = get_routing_entry(routes, src);
     // If we are the destination
     if(dest == ip_address){
+        // Can optinally update the next hop as well potentially (not doing it yet)
         if(originator != NULL){
             pthread_mutex_lock(&originator->entry_mutex);
             set_expiration_timer(originator, ACTIVE_ROUTE_TIMEOUT);
@@ -133,9 +134,13 @@ uint8_t outgoing_message(uint8_t *raw_pack, uint32_t src, uint32_t dest, uint8_t
     if(destination != NULL && destination->status == ROUTE_VALID && destination->seq_valid == SEQ_VALID && (destination->next_hop == destination->dest_ip || ((next_hop = get_routing_entry(routes, destination->next_hop)) != NULL && next_hop->status == ROUTE_VALID))){
         //debprintf("[OUTPUT] Already has a route\n");
         // ? I do not think we should refresh on sending out a packet
-        pthread_mutex_lock(&destination->entry_mutex);
-        set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
-        pthread_mutex_unlock(&destination->entry_mutex);
+        // Prevent single hop remaining valid solely based on sending data
+        // But also prevent route from expiring mid transmission
+        if(destination->next_hop == destination->dest_ip){
+            pthread_mutex_lock(&destination->entry_mutex);
+            set_expiration_timer(destination, ACTIVE_ROUTE_TIMEOUT);
+            pthread_mutex_unlock(&destination->entry_mutex);
+        }
         // Pass Packet
         return PACKET_ACCEPT;
     }

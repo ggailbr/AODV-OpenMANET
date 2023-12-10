@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 #ifdef DEBUG
-#define debprintf(...)  fprintf(stderr, __VA_ARGS__)
+#define debprintf(...)  fprintf(stdout, __VA_ARGS__); fflush(stdout);
 #else
 #define debprintf(...)
 #endif

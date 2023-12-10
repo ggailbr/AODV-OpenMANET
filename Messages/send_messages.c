@@ -152,9 +152,10 @@ uint8_t send_rreq(uint32_t dest_addr){
     pthread_mutex_lock(&dest_entry->entry_mutex);
     outcome = dest_entry->rreq_search;
     pthread_mutex_unlock(&dest_entry->entry_mutex);
-    // Attempting self Unicast
-    sprintf(timing_buff, "[RREQ] %d, %ld, %ld", outcome, clock()-starting_time, CLOCKS_PER_SEC);
-    SendUnicast(ip_address, (uint8_t *)timing_buff, sizeof(timing_buff), NULL);
+    if(LOGGING == PACKET_ACCEPT){
+        sprintf(timing_buff, "[RREQ] %d, %ld, %ld", outcome, clock()-starting_time, CLOCKS_PER_SEC);
+        SendUnicast(ip_address, (uint8_t *)timing_buff, sizeof(timing_buff), NULL);
+    }
 
     // If it was a failure
     if(outcome == SEARCH_FAILED){
