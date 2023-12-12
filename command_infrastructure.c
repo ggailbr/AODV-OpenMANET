@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 #include <sys/prctl.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 #define MAX_MESSAGE 1024
 
@@ -27,10 +28,15 @@ typedef enum packet_type_e{
     HELLO_TYPE = 1u
 }packet_type;
 
+#define NODE_NUMBER 3
+
+char *node_list[] = {"192.168.1.4", "192.168.1.8", "192.168.1.9"};
+
 pthread_t timing_handle, net_input_handle;
 
 void* timing_thread(void *temp);
 void* net_input_thread(void *temp);
+void* net_input_thread_2(void *temp);
 
 // open("data/capture_<timestamp>.pcap", O_WRONLY | O_CREAT | O_SYNC, , S_IRUSR | S_IWUSR)
 
@@ -38,6 +44,11 @@ void* net_input_thread(void *temp);
 int main(int argc, char **argv){
 
     char folder[80], pcap_path[180], output_path[180], aodv_path[180];
+	int sfpt;
+	struct sockaddr_in serv_addr;
+	char ack[30];
+
+
     sprintf(folder, "%ld/", time(NULL));
     struct stat st = {0};
     strcpy(pcap_path, folder);
@@ -81,57 +92,40 @@ int main(int argc, char **argv){
     fsync(STDOUT_FILENO);
     dup2(fd, STDOUT_FILENO);
     close(fd);
+
+    fprintf(stderr, "Are you 192.168.1.7?: ");
+    scanf("%s", ack);
+
     pthread_create(&timing_handle, NULL, timing_thread, NULL);
-    pthread_create(&net_input_handle, NULL, net_input_thread, NULL);
-    
-	int sfpt;
-    long file_size;
-	struct sockaddr_in serv_addr;
-	char buffer[100], addr_buffer[100],ack[30];
-	FILE * fpt;
-	char * file;
+
+    if(ack[0] != 'y' && ack[0] != 'Y'){
+        fprintf(stderr, "Not 7\n");
+        pthread_create(&net_input_handle, NULL, net_input_thread, NULL);
+    }
+    // else{
+    //     fprintf(stderr, "7\n");
+    //     pthread_create(&net_input_handle, NULL, net_input_thread_2, NULL);
+    // }
     while(1){
-	    sfpt = socket(AF_INET,SOCK_STREAM,0);
-        fprintf(stderr, "Input ipaddress (ex. 192.168.1.8): ");
-        scanf("%s", addr_buffer);
-        fprintf(stderr, "Input File Name: ");
-        scanf("%s", buffer);
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(26755);
-        serv_addr.sin_addr.s_addr = inet_addr(addr_buffer);
-        inet_pton(AF_INET,addr_buffer,&serv_addr.sin_addr);
-        while(connect(sfpt,(struct sockaddr*) &serv_addr,sizeof(serv_addr)) < 0){
-            printf("Initial Connection Failed\n");
-            fflush(stdout);
+        if(ack[0] == 'y' || ack[0] == 'Y'){
+            for(int i = 0; i < NODE_NUMBER; i++){
+                sfpt = socket(AF_INET,SOCK_STREAM,0);
+                serv_addr.sin_family = AF_INET;
+                serv_addr.sin_port = htons(26755);
+                serv_addr.sin_addr.s_addr = inet_addr(node_list[i]);
+                inet_pton(AF_INET,node_list[i],&serv_addr.sin_addr);
+                if(connect(sfpt,(struct sockaddr*) &serv_addr,sizeof(serv_addr)) < 0){
+                    fprintf(stderr, "Initial Connection Failed\n");
+                    fflush(stdout);
+                    close(sfpt);
+                    continue;
+                }
+                fprintf(stderr, "Connected to %s\n", inet_ntoa(serv_addr.sin_addr));
+                fflush(stdout);
+                close(sfpt);
+            }
+            sleep(10);
         }
-        printf("Connected to %s\n", inet_ntoa(serv_addr.sin_addr));
-        fflush(stdout);
-        fprintf(stderr, "%s\n", buffer);
-        if((fpt = fopen(buffer,"r")) < 0){
-            continue;
-        }
-        fseek(fpt,0,SEEK_END);
-        file_size = ftell(fpt);
-        fseek(fpt,0,SEEK_SET);
-        sprintf(ack,"%ld",file_size);
-        file = (char *)malloc(file_size);
-        fread(file,1,file_size,fpt);
-        clock_t start = clock(), diff;
-        send(sfpt,ack,sizeof(ack),0);
-        send(sfpt,buffer,strlen(buffer)+1,0);
-        recv(sfpt,ack,sizeof(ack),0);
-        send(sfpt,file,file_size,0);
-        fprintf(stderr, "File Send\n");
-        recv(sfpt,ack,sizeof(ack),0);
-        fprintf(stderr, "Received: %s\n",ack);
-        fclose(fpt);
-        diff = clock() - start;
-        clock_t msec = diff * 1000 / CLOCKS_PER_SEC;
-        printf("Time taken for %ldBytes file %ld/%ld s\n", file_size, diff, CLOCKS_PER_SEC);
-        fflush(stdout);
-        printf("Total Time = %ldms\n", msec);
-        fflush(stdout);
-	    close(sfpt);
     }
     return 1;
 }
@@ -172,12 +166,10 @@ void* timing_thread(void *__temp){
     }
 }
 void* net_input_thread(void *temp){
-	int sfpt,accepted,file_size,opt = 1,read_amount;
+	int sfpt, s_fpt, accepted, opt = 1;
 	struct sockaddr_in serv_addr,client_addr;
-	char buffer[100],ack[] = "Acknowledged";
-	FILE * fpt;
-	char * file;
 	int addrlen = sizeof(serv_addr);
+    char buff[100], ack[] = "Acknowledged\n";
 
 	sfpt = socket(AF_INET,SOCK_STREAM,0);
 	setsockopt(sfpt,SOL_SOCKET, SO_REUSEADDR,&opt,sizeof(opt));
@@ -188,22 +180,64 @@ void* net_input_thread(void *temp){
 	listen(sfpt,2);
     while(1){
         accepted = accept(sfpt,(struct sockaddr*)&client_addr,(socklen_t *) &addrlen);
-        printf("Connection from %s\n", inet_ntoa(client_addr.sin_addr));
+        fprintf(stderr, "Connection from %s\n", inet_ntoa(client_addr.sin_addr));
         fflush(stdout);
-        recv(accepted,buffer,99,0);
-        file_size = atoi(buffer);
-        recv(accepted,buffer,99,0);
-        fpt = fopen(buffer,"w");
-        file = (char *)malloc(file_size);
-        send(accepted,ack,sizeof(ack),0);
-        while(read_amount < file_size){
-            read_amount += read(accepted,&(file[read_amount]),file_size);
-        }
-        fwrite(file,1,file_size,fpt);
-        send(accepted,ack,sizeof(ack),0);
-        fclose(fpt);
+        recv(accepted,buff,99,0);
         close(accepted);
+        if(fork() == 0){
+            prctl(PR_SET_PDEATHSIG, SIGHUP);
+            s_fpt = socket(AF_INET,SOCK_STREAM,0);
+            serv_addr.sin_family = AF_INET;
+            serv_addr.sin_port = htons(26755);
+            serv_addr.sin_addr.s_addr = inet_addr("192.168.1.7");
+            inet_pton(AF_INET,"192.168.1.7",&serv_addr.sin_addr);
+            if(connect(s_fpt,(struct sockaddr*) &serv_addr,sizeof(serv_addr)) < 0){
+                fprintf(stderr, "Initial Connection Failed\n");
+                fflush(stdout);
+                close(s_fpt);
+                return NULL;
+            }
+            fprintf(stderr, "Connected to %s\n", inet_ntoa(serv_addr.sin_addr));
+            fflush(stdout);
+            fsync(STDOUT_FILENO);
+            dup2(s_fpt, 1);
+            system("sudo ip route");
+            fflush(stdout);
+            send(s_fpt,ack,sizeof(ack),0);
+            close(s_fpt);
+        }
+        wait(NULL);
+
     }
 	close(sfpt);
     return NULL;
 }
+
+// void* net_input_thread_2(void *temp){
+//     int sfpt, accepted, opt = 1;
+// 	struct sockaddr_in serv_addr,client_addr;
+// 	int addrlen = sizeof(serv_addr);
+//     char incoming[MAX_MESSAGE];
+
+// 	sfpt = socket(AF_INET,SOCK_STREAM,0);
+// 	setsockopt(sfpt,SOL_SOCKET, SO_REUSEADDR,&opt,sizeof(opt));
+// 	serv_addr.sin_family = AF_INET;
+// 	serv_addr.sin_port = htons(26755);
+// 	serv_addr.sin_addr.s_addr = INADDR_ANY;
+// 	bind(sfpt,(struct sockaddr*)&serv_addr,sizeof(serv_addr));
+// 	listen(sfpt,2);
+//     fprintf(stderr, "In sender server thread\n");
+//     while(1){
+//         accepted = accept(sfpt,(struct sockaddr*)&client_addr,(socklen_t *) &addrlen);
+//         fprintf(stderr, "Connection from %s\n", inet_ntoa(client_addr.sin_addr));
+//         fflush(stdout);
+//         recv(accepted,incoming,MAX_MESSAGE,0);
+//         fprintf(stderr, incoming);
+//         recv(accepted,incoming,MAX_MESSAGE,0);
+//         fprintf(stderr, incoming);
+//         fflush(stdout);
+//         close(accepted);
+//     }
+// 	close(sfpt);
+//     return NULL;
+// }
