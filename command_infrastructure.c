@@ -30,7 +30,7 @@ typedef enum packet_type_e{
 
 #define NODE_NUMBER 3
 
-char *node_list[] = {"192.168.1.4", "192.168.1.8", "192.168.1.9"};
+char *node_list[] = {"192.168.1.4", "192.168.1.9", "192.168.1.8"};
 
 pthread_t timing_handle, net_input_handle;
 
@@ -109,7 +109,9 @@ int main(int argc, char **argv){
     while(1){
         if(ack[0] == 'y' || ack[0] == 'Y'){
             for(int i = 0; i < NODE_NUMBER; i++){
-                sfpt = socket(AF_INET,SOCK_STREAM,0);
+                if((sfpt = socket(AF_INET,SOCK_STREAM,0)) < 0){
+                    fprintf(stderr, "Failed to create Socket\n");
+                }
                 serv_addr.sin_family = AF_INET;
                 serv_addr.sin_port = htons(26755);
                 serv_addr.sin_addr.s_addr = inet_addr(node_list[i]);
