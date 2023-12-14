@@ -130,7 +130,7 @@ int main(int argc, char **argv){
                 fgets(ack, 30, stdin);
                 // if running a ping
                 if(ack[0] == 'p' || ack[0] == 'P'){
-                    fprintf(stderr, "--------------------------------\n");
+                    fprintf(stderr, "------------PING----------------\n");
                     for(int i = 0; i < NODE_NUMBER; i++){
                         if((sfpt = socket(AF_INET,SOCK_STREAM,0)) < 0){
                             fprintf(stderr, "Failed to create Socket\n");
@@ -151,8 +151,73 @@ int main(int argc, char **argv){
                         close(sfpt);
                     }
                 }
+                else if(ack[0] == 'c' || ack[0] == 'C'){
+                    fprintf(stderr, "------------CONF----------------\n");
+                    for(int i = NODE_NUMBER - 1; i >= 0; i--){
+                        if((sfpt = socket(AF_INET,SOCK_STREAM,0)) < 0){
+                            fprintf(stderr, "Failed to create Socket\n");
+                        }
+                        serv_addr.sin_family = AF_INET;
+                        serv_addr.sin_port = htons(26755);
+                        serv_addr.sin_addr.s_addr = inet_addr(node_list[i]);
+                        inet_pton(AF_INET,node_list[i],&serv_addr.sin_addr);
+                        if(connect(sfpt,(struct sockaddr*) &serv_addr,sizeof(serv_addr)) < 0){
+                            fprintf(stderr, "Initial Connection Failed\n");
+                            fflush(stdout);
+                            close(sfpt);
+                            continue;
+                        }
+                        fprintf(stderr, "Connected to %s\n", inet_ntoa(serv_addr.sin_addr));
+                        if(i == 0){
+                            send(sfpt,"5 8",4,0);
+                        }
+                        if(i == 1){
+                            send(sfpt,"9 7",4,0);
+                        }
+                        if(i == 2){
+                            send(sfpt,"8 7 5",6,0);
+                        }
+                        fflush(stdout);
+                        close(sfpt);
+                    }
+                    strcpy(ack, "7 8 9");
+                    position = 1;
+                    while(ack[position] != '\0'){
+                        if(ack[position] != ' ' && ack[position] >= '0' && ack[position] <= '9'){
+                            system(mangle_rules[ack[position]-'0']);
+                        }
+                        if(ack[position] == 'f' || ack[position] == 'F'){
+                            system("sudo iptables -t mangle -F");
+                        }
+                        position++;
+                    }
+                }
+                else if(ack[0] == 'f' || ack[0] == 'F'){
+                    fprintf(stderr, "------------FLUS----------------\n");
+                    for(int i = NODE_NUMBER - 1; i >= 0; i--){
+                        if((sfpt = socket(AF_INET,SOCK_STREAM,0)) < 0){
+                            fprintf(stderr, "Failed to create Socket\n");
+                        }
+                        serv_addr.sin_family = AF_INET;
+                        serv_addr.sin_port = htons(26755);
+                        serv_addr.sin_addr.s_addr = inet_addr(node_list[i]);
+                        inet_pton(AF_INET,node_list[i],&serv_addr.sin_addr);
+                        if(connect(sfpt,(struct sockaddr*) &serv_addr,sizeof(serv_addr)) < 0){
+                            fprintf(stderr, "Initial Connection Failed\n");
+                            fflush(stdout);
+                            close(sfpt);
+                            continue;
+                        }
+                        send(sfpt,"0 F",4,0);
+                        fprintf(stderr, "Connected to %s\n", inet_ntoa(serv_addr.sin_addr));
+                        fflush(stdout);
+                        close(sfpt);
+                    }
+                    system("sudo iptables -t mangle -F");
+                }
                 // If sending a removal
-                if(ack[0] >= '0' && ack[0] <= '9'){
+                else if(ack[0] >= '0' && ack[0] <= '9'){
+                    fprintf(stderr, "------------SETM----------------\n");
                     position = 0;
                     if(ack[0] == '7'){
                         position = 1;
@@ -171,6 +236,7 @@ int main(int argc, char **argv){
                         if((sfpt = socket(AF_INET,SOCK_STREAM,0)) < 0){
                             fprintf(stderr, "Failed to create Socket\n");
                         }
+                        printf(target_ip);
                         serv_addr.sin_family = AF_INET;
                         serv_addr.sin_port = htons(26755);
                         serv_addr.sin_addr.s_addr = inet_addr(target_ip);
@@ -288,32 +354,3 @@ void* net_input_thread(void *temp){
 	close(sfpt);
     return NULL;
 }
-
-// void* net_input_thread_2(void *temp){
-//     int sfpt, accepted, opt = 1;
-// 	struct sockaddr_in serv_addr,client_addr;
-// 	int addrlen = sizeof(serv_addr);
-//     char incoming[MAX_MESSAGE];
-
-// 	sfpt = socket(AF_INET,SOCK_STREAM,0);
-// 	setsockopt(sfpt,SOL_SOCKET, SO_REUSEADDR,&opt,sizeof(opt));
-// 	serv_addr.sin_family = AF_INET;
-// 	serv_addr.sin_port = htons(26755);
-// 	serv_addr.sin_addr.s_addr = INADDR_ANY;
-// 	bind(sfpt,(struct sockaddr*)&serv_addr,sizeof(serv_addr));
-// 	listen(sfpt,2);
-//     fprintf(stderr, "In sender server thread\n");
-//     while(1){
-//         accepted = accept(sfpt,(struct sockaddr*)&client_addr,(socklen_t *) &addrlen);
-//         fprintf(stderr, "Connection from %s\n", inet_ntoa(client_addr.sin_addr));
-//         fflush(stdout);
-//         recv(accepted,incoming,MAX_MESSAGE,0);
-//         fprintf(stderr, incoming);
-//         recv(accepted,incoming,MAX_MESSAGE,0);
-//         fprintf(stderr, incoming);
-//         fflush(stdout);
-//         close(accepted);
-//     }
-// 	close(sfpt);
-//     return NULL;
-// }
