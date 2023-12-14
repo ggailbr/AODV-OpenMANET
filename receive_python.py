@@ -7,18 +7,29 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import subprocess
 
+#8       9
+#5       7
 #create globals for graph 
-nodes = [4,7,8,9]
+nodes = [1,2,3,4]
 node_pos = {
-  4: (50, 50),
-  7: (100, 50),
-  8: (50, 100),
-  9: (100, 100)
+  2: (20, 30),
+  1: (15, -50),
+  3: (10, 70),
+  4: (10, 130)
+}
+node_label = {
+    5: 2,
+    7: 1,
+    8: 4,
+    9: 3
 }
 
 G = nx.DiGraph()
-
-# ['192.168.1.0/24 dev wlan0 proto kernel scope link src 192.168.1.4', '192.168.1.7 via 192.168.1.7 dev wlan0 proto static', '192.168.1.8 via 192.168.1.8 dev wlan0 proto static', '192.168.1.9 via 192.168.1.9 dev wlan0 proto static']
+elist5 = []
+elist7 = []
+elist8 = []
+elist9 = []
+# ['192.168.1.0/24 dev wlan0 proto kernel scope link src 192.158.1.4', '192.168.1.7 via 192.168.1.7 dev wlan0 proto static', '192.168.1.8 via 192.168.1.8 dev wlan0 proto static', '192.168.1.9 via 192.168.1.9 dev wlan0 proto static']
 """
 ['192.168.1.0/24 dev wlan0 proto kernel scope link src 192.168.1.4', '192.168.1.7 via 192.168.1.7 dev wlan0 proto static']
 ['192.168.1.0/24 dev wlan0 proto kernel scope link src 192.168.1.8', '192.168.1.7 via 192.168.1.7 dev wlan0 proto static']
@@ -27,44 +38,53 @@ G = nx.DiGraph()
 # In this TCP server case - the request handler is derived from StreamRequestHandler
 
 class MyTCPRequestHandler(socketserver.StreamRequestHandler):
-    elist4 = []
-    elist7 = []
-    elist8 = []
-    elist9 = []
 
     def parse_row(self, table_row):
         start = table_row.find('via')
         destination_node = int(table_row[start+14])
-        return destination_node
+        return node_label[destination_node]
 
     # parse the table of node 7
     def parse_my_table(self, table):
-        G.remove_edges_from(self.elist7)
-        self.elist7 = []
+        global elist5
+        global elist7
+        global elist8
+        global elist9
+        elist7 = []
+        print("Received from 7: Clearing elist")
         #any other entries after row 3 must be routes
         for i in range(3, len(table)):
-            self.elist7.append((7, self.parse_row(table[i])))
-        G.add_edges_from(self.elist7)
+            elist7.append((node_label[7], self.parse_row(table[i])))
 
-    # parse the table of node 4, 8, 9
+    # parse the table of node 5, 8, 9
     def parse_table(self, table):
+        global elist5
+        global elist7
+        global elist8
+        global elist9
         #assume first row has which node this is
         row0 = table[0]
         source_node = int(row0[len(row0)-1])
-        if source_node == 4:
-            self.elist4 = []
+        print("Received from "+str(source_node)+": Clearing elist")
+        if source_node == 5:
+            elist5 = []
             for i in range(1, len(table)):
-                self.elist4.append((source_node, self.parse_row(table[i])))
+                elist5.append((node_label[source_node], self.parse_row(table[i])))
         elif source_node == 8:
-            self.elist8 = []
+            elist8 = []
             for i in range(1, len(table)):
-                self.elist8.append((source_node, self.parse_row(table[i])))
+                elist8.append((node_label[source_node], self.parse_row(table[i])))
         elif source_node == 9:
-            self.elist9 = []
+            elist9 = []
             for i in range(1, len(table)):
-                self.elist9.append((source_node, self.parse_row(table[i])))
+                elist9.append((node_label[source_node], self.parse_row(table[i])))
 
     def handle(self):
+        global elist5
+        global elist7
+        global elist8
+        global elist9
+
         # Receive and print the data received from client
         route_lines = []
         # route_lines.append(self.client_address[0])
@@ -72,6 +92,8 @@ class MyTCPRequestHandler(socketserver.StreamRequestHandler):
         while(msg != "Acknowledged"):
             route_lines.append(msg)
             msg = self.rfile.readline().strip().decode('utf-8')
+
+        print(route_lines)
 
         # clear graph
         plt.clf()
@@ -83,23 +105,26 @@ class MyTCPRequestHandler(socketserver.StreamRequestHandler):
         my_table = my_table.decode('UTF-8').splitlines()
         self.parse_my_table(my_table)
 
-        print("edges of 7:")
-        print(self.elist7)
-        print("edges of 4:")
-        print(self.elist4)
+        """ print("edges of 7:")
+        print(elist7)
+        print("edges of 5:")
+        print(elist5)
         print("edges of 8:")
-        print(self.elist8)
+        print(elist8)
         print("edges of 9:")
-        print(self.elist9)
+        print(elist9) """
 
         # new graph
         #print(elist)
-        G.add_edges_from(self.elist4)
-        G.add_edges_from(self.elist7)
-        G.add_edges_from(self.elist8)
-        G.add_edges_from(self.elist9)
+        G.add_edges_from(elist5)
+        G.add_edges_from(elist7)
+        G.add_edges_from(elist8)
+        G.add_edges_from(elist9)
 
         nx.draw_networkx(G, with_labels=True, pos=node_pos)
+        fig = plt.gcf()
+        fig.set_figwidth(2)
+        fig.set_figheight(5)
         plt.ion()
         plt.show(block=False)
         plt.pause(1)

@@ -33,5 +33,8 @@ run: AODV.out
 clean:
 	rm -rf Build/*
 
-
+# iptables -t mangle -A PREROUTING -m mac --mac-source e4:5f:01:47:56:f6 -j DROP     For 9
+# iptables -t mangle -A PREROUTING -m mac --mac-source e4:5f:01:47:25:4f -j DROP     For 5
+# iptables -t mangle -A PREROUTING -m mac --mac-source e4:5f:01:47:55:be -j DROP	 For 7
+# iptables -t mangle -A PREROUTING -m mac --mac-source e4:5f:01:47:5d:e6 -j DROP	 For 8
 # iptables -t mangle -A PREROUTING -m mac --mac-source 48:5d:60:7e:bb:8f -j DROP

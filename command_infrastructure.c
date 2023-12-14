@@ -30,13 +30,28 @@ typedef enum packet_type_e{
 
 #define NODE_NUMBER 3
 
-char *node_list[] = {"192.168.1.4", "192.168.1.9", "192.168.1.8"};
+char *node_list[] = {"192.168.1.5", "192.168.1.9", "192.168.1.8"};
 
 pthread_t timing_handle, net_input_handle;
 
 void* timing_thread(void *temp);
 void* net_input_thread(void *temp);
 void* net_input_thread_2(void *temp);
+
+
+char *mangle_rules[] = {
+    NULL, // 0
+    NULL, // 1
+    NULL, // 2
+    NULL, // 3
+    NULL, // 4
+    "sudo iptables -t mangle -A PREROUTING -m mac --mac-source e4:5f:01:47:25:4f -j DROP\n\0", // 5
+    NULL, // 6
+    "sudo iptables -t mangle -A PREROUTING -m mac --mac-source e4:5f:01:47:55:be -j DROP\n\0", // 7
+    "sudo iptables -t mangle -A PREROUTING -m mac --mac-source e4:5f:01:47:5d:e6 -j DROP\n\0", // 8
+    "sudo iptables -t mangle -A PREROUTING -m mac --mac-source e4:5f:01:47:56:f6 -j DROP\n\0", // 9
+
+};
 
 // open("data/capture_<timestamp>.pcap", O_WRONLY | O_CREAT | O_SYNC, , S_IRUSR | S_IWUSR)
 
@@ -46,7 +61,8 @@ int main(int argc, char **argv){
     char folder[80], pcap_path[180], output_path[180], aodv_path[180];
 	int sfpt;
 	struct sockaddr_in serv_addr;
-	char ack[30];
+	char ack[30] = {0}, target_ip[50];
+    int position;
 
 
     sprintf(folder, "%ld/", time(NULL));
@@ -108,25 +124,70 @@ int main(int argc, char **argv){
     // }
     while(1){
         if(ack[0] == 'y' || ack[0] == 'Y'){
-            for(int i = 0; i < NODE_NUMBER; i++){
-                if((sfpt = socket(AF_INET,SOCK_STREAM,0)) < 0){
-                    fprintf(stderr, "Failed to create Socket\n");
+            // 7598
+            while(1){
+                memset(ack, '\0', 30);
+                fgets(ack, 30, stdin);
+                // if running a ping
+                if(ack[0] == 'p' || ack[0] == 'P'){
+                    fprintf(stderr, "--------------------------------\n");
+                    for(int i = 0; i < NODE_NUMBER; i++){
+                        if((sfpt = socket(AF_INET,SOCK_STREAM,0)) < 0){
+                            fprintf(stderr, "Failed to create Socket\n");
+                        }
+                        serv_addr.sin_family = AF_INET;
+                        serv_addr.sin_port = htons(26755);
+                        serv_addr.sin_addr.s_addr = inet_addr(node_list[i]);
+                        inet_pton(AF_INET,node_list[i],&serv_addr.sin_addr);
+                        if(connect(sfpt,(struct sockaddr*) &serv_addr,sizeof(serv_addr)) < 0){
+                            fprintf(stderr, "Initial Connection Failed\n");
+                            fflush(stdout);
+                            close(sfpt);
+                            continue;
+                        }
+                        fprintf(stderr, "Connected to %s\n", inet_ntoa(serv_addr.sin_addr));
+                        send(sfpt,ack,sizeof(ack),0);
+                        fflush(stdout);
+                        close(sfpt);
+                    }
                 }
-                serv_addr.sin_family = AF_INET;
-                serv_addr.sin_port = htons(26755);
-                serv_addr.sin_addr.s_addr = inet_addr(node_list[i]);
-                inet_pton(AF_INET,node_list[i],&serv_addr.sin_addr);
-                if(connect(sfpt,(struct sockaddr*) &serv_addr,sizeof(serv_addr)) < 0){
-                    fprintf(stderr, "Initial Connection Failed\n");
-                    fflush(stdout);
-                    close(sfpt);
-                    continue;
+                // If sending a removal
+                if(ack[0] >= '0' && ack[0] <= '9'){
+                    position = 0;
+                    if(ack[0] == '7'){
+                        position = 1;
+                        while(ack[position] != '\0'){
+                            if(ack[position] != ' ' && ack[position] >= '0' && ack[position] <= '9'){
+                                system(mangle_rules[ack[position]-'0']);
+                            }
+                            if(ack[position] == 'f' || ack[position] == 'F'){
+                                system("sudo iptables -t mangle -F");
+                            }
+                            position++;
+                        }
+                    }
+                    else{
+                        sprintf(target_ip, "192.168.1.%d", ack[0]-'0');
+                        if((sfpt = socket(AF_INET,SOCK_STREAM,0)) < 0){
+                            fprintf(stderr, "Failed to create Socket\n");
+                        }
+                        serv_addr.sin_family = AF_INET;
+                        serv_addr.sin_port = htons(26755);
+                        serv_addr.sin_addr.s_addr = inet_addr(target_ip);
+                        inet_pton(AF_INET,target_ip,&serv_addr.sin_addr);
+                        if(connect(sfpt,(struct sockaddr*) &serv_addr,sizeof(serv_addr)) < 0){
+                            fprintf(stderr, "Initial Connection Failed\n");
+                            fflush(stdout);
+                            close(sfpt);
+                            continue;
+                        }
+                        fprintf(stderr, "Connected to %s\n", inet_ntoa(serv_addr.sin_addr));
+                        fflush(stdout);
+                        send(sfpt,ack,sizeof(ack),0);
+                        close(sfpt);
+                    }
                 }
-                fprintf(stderr, "Connected to %s\n", inet_ntoa(serv_addr.sin_addr));
-                fflush(stdout);
-                close(sfpt);
             }
-            sleep(10);
         }
     }
     return 1;
@@ -170,7 +231,7 @@ void* timing_thread(void *__temp){
 void* net_input_thread(void *temp){
 	int sfpt, s_fpt, accepted, opt = 1;
 	struct sockaddr_in serv_addr,client_addr;
-	int addrlen = sizeof(serv_addr);
+	int addrlen = sizeof(serv_addr), position;
     char buff[100], ack[] = "Acknowledged\n";
 
 	sfpt = socket(AF_INET,SOCK_STREAM,0);
@@ -184,32 +245,45 @@ void* net_input_thread(void *temp){
         accepted = accept(sfpt,(struct sockaddr*)&client_addr,(socklen_t *) &addrlen);
         fprintf(stderr, "Connection from %s\n", inet_ntoa(client_addr.sin_addr));
         fflush(stdout);
-        recv(accepted,buff,99,0);
+        while(recv(accepted,buff,99,0) == 0);
         close(accepted);
-        if(fork() == 0){
-            prctl(PR_SET_PDEATHSIG, SIGHUP);
-            s_fpt = socket(AF_INET,SOCK_STREAM,0);
-            serv_addr.sin_family = AF_INET;
-            serv_addr.sin_port = htons(26755);
-            serv_addr.sin_addr.s_addr = inet_addr("192.168.1.7");
-            inet_pton(AF_INET,"192.168.1.7",&serv_addr.sin_addr);
-            if(connect(s_fpt,(struct sockaddr*) &serv_addr,sizeof(serv_addr)) < 0){
-                fprintf(stderr, "Initial Connection Failed\n");
-                fflush(stdout);
-                close(s_fpt);
-                return NULL;
+        if(buff[0] != 'p'){
+            position = 1;
+            while(buff[position] != '\0'){
+                if(buff[position] != ' ' && buff[position] >= '0' && buff[position] <= '9'){
+                    system(mangle_rules[buff[position]-'0']);
+                }
+                if(buff[position] == 'f' || buff[position] == 'F'){
+                    system("sudo iptables -t mangle -F");
+                }
+                position++;
             }
-            fprintf(stderr, "Connected to %s\n", inet_ntoa(serv_addr.sin_addr));
-            fflush(stdout);
-            fsync(STDOUT_FILENO);
-            dup2(s_fpt, 1);
-            system("sudo ip route");
-            fflush(stdout);
-            send(s_fpt,ack,sizeof(ack),0);
-            close(s_fpt);
         }
-        wait(NULL);
-
+        else{
+            if(fork() == 0){
+                prctl(PR_SET_PDEATHSIG, SIGHUP);
+                s_fpt = socket(AF_INET,SOCK_STREAM,0);
+                serv_addr.sin_family = AF_INET;
+                serv_addr.sin_port = htons(26755);
+                serv_addr.sin_addr.s_addr = inet_addr("192.168.1.7");
+                inet_pton(AF_INET,"192.168.1.7",&serv_addr.sin_addr);
+                if(connect(s_fpt,(struct sockaddr*) &serv_addr,sizeof(serv_addr)) < 0){
+                    fprintf(stderr, "Initial Connection Failed\n");
+                    fflush(stdout);
+                    close(s_fpt);
+                    return NULL;
+                }
+                fprintf(stderr, "Connected to %s\n", inet_ntoa(serv_addr.sin_addr));
+                fflush(stdout);
+                fsync(STDOUT_FILENO);
+                dup2(s_fpt, 1);
+                system("sudo ip route");
+                fflush(stdout);
+                send(s_fpt,ack,sizeof(ack),0);
+                close(s_fpt);
+            }
+            wait(NULL);
+        }
     }
 	close(sfpt);
     return NULL;
